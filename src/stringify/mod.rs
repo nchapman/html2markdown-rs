@@ -78,21 +78,22 @@ impl Default for StringifyOptions {
 /// Serializer state threaded through all handlers.
 pub(crate) struct State<'a> {
     pub options: &'a StringifyOptions,
-    /// Stack of construct names for escaping scope.
-    pub stack: Vec<String>,
     /// Current list bullet (may switch to avoid conflicts).
     pub bullet_current: Option<char>,
     /// Previous list's bullet (for alternation).
     pub bullet_last_used: Option<char>,
+    /// Whether the next text to be emitted is at the start of a block (atBreak).
+    /// Used to apply at-break character escaping (e.g. `+` before space → `\+`).
+    pub at_break: bool,
 }
 
 impl<'a> State<'a> {
     pub fn new(options: &'a StringifyOptions) -> Self {
         Self {
             options,
-            stack: Vec::new(),
             bullet_current: None,
             bullet_last_used: None,
+            at_break: false,
         }
     }
 }
@@ -102,8 +103,9 @@ pub(crate) fn stringify(node: &Node, options: &StringifyOptions) -> String {
     let mut state = State::new(options);
     let mut output = handlers::handle(&mut state, node);
 
-    // Ensure trailing newline.
-    if !output.ends_with('\n') {
+    // Ensure trailing newline (only if non-empty).
+    // Port of mdast-util-to-markdown: `result && !result.endsWith('\n') → result += '\n'`
+    if !output.is_empty() && !output.ends_with('\n') {
         output.push('\n');
     }
 

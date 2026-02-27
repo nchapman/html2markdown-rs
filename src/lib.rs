@@ -16,21 +16,20 @@ pub use error::HtmlToMarkdownError;
 pub use stringify::{HeadingStyle, ListItemIndent, StringifyOptions};
 
 /// Conversion options.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct Options {
     /// Serializer formatting options.
     pub stringify: StringifyOptions,
     /// Whether to preserve newlines in whitespace normalization.
     pub newlines: bool,
-}
-
-impl Default for Options {
-    fn default() -> Self {
-        Self {
-            stringify: StringifyOptions::default(),
-            newlines: false,
-        }
-    }
+    /// Symbol for checked checkboxes/radio buttons. Default: `"[x]"`.
+    pub checked: Option<String>,
+    /// Symbol for unchecked checkboxes/radio buttons. Default: `"[ ]"`.
+    pub unchecked: Option<String>,
+    /// Quote character pairs for `<q>` elements, cycling by nesting depth.
+    /// Each entry is 1 or 2 chars: open (and optionally close).
+    /// Default: `['"']` (plain ASCII double-quote for both open and close).
+    pub quotes: Vec<String>,
 }
 
 impl Options {
@@ -171,6 +170,9 @@ pub fn html_to_mdast(
 ) -> Result<mdast::Node, HtmlToMarkdownError> {
     let transform_options = hast_to_mdast::TransformOptions {
         newlines: options.newlines,
+        checked: options.checked.clone(),
+        unchecked: options.unchecked.clone(),
+        quotes: options.quotes.clone(),
     };
     Ok(hast_to_mdast::transform(html, transform_options))
 }
@@ -187,7 +189,7 @@ mod tests {
     #[test]
     fn test_convert_empty() {
         let result = convert("").unwrap();
-        assert_eq!(result, "\n");
+        assert_eq!(result, "");
     }
 
     #[test]

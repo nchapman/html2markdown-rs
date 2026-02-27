@@ -48,31 +48,41 @@ fn handle_root(state: &mut State, node: &mdast::Root) -> String {
 }
 
 fn handle_paragraph(state: &mut State, node: &mdast::Paragraph) -> String {
-    super::phrasing::container_phrasing(state, &node.children)
+    state.at_break = true;
+    let content = super::phrasing::container_phrasing(state, &node.children);
+    state.at_break = false;
+    content
 }
 
 fn handle_heading(state: &mut State, node: &mdast::Heading) -> String {
     let content = super::phrasing::container_phrasing(state, &node.children);
 
-    match state.options.heading_style {
-        super::HeadingStyle::Setext if node.depth <= 2 => {
-            let marker = if node.depth == 1 { '=' } else { '-' };
-            let line_len = content.lines().last().map_or(content.len(), |l| l.len());
-            let underline_len = line_len.max(3);
-            format!(
-                "{}\n{}",
-                content,
-                std::iter::repeat(marker).take(underline_len).collect::<String>()
-            )
-        }
-        _ => {
-            let hashes: String = std::iter::repeat('#').take(node.depth as usize).collect();
-            if state.options.close_atx {
-                format!("{} {} {}", hashes, content, hashes)
-            } else {
-                format!("{} {}", hashes, content)
-            }
-        }
+    // Use setext for h1/h2 if: (a) setext style is configured, or (b) content
+    // contains a newline (from Break nodes or text with preserved newlines).
+    // ATX headings cannot span multiple lines, so setext is the only valid choice.
+    let use_setext = node.depth <= 2
+        && (matches!(state.options.heading_style, super::HeadingStyle::Setext)
+            || content.contains('\n'));
+
+    if use_setext {
+        let marker = if node.depth == 1 { '=' } else { '-' };
+        let line_len = content.lines().last().map_or(content.chars().count(), |l| l.chars().count());
+        let underline_len = line_len.max(3);
+        return format!(
+            "{}\n{}",
+            content,
+            marker.to_string().repeat(underline_len)
+        );
+    }
+
+    // ATX heading: replace hard breaks first, then bare newlines.
+    // Order matters: reversing would corrupt "\\\n" (the \n would be replaced first).
+    let content = content.replace("\\\n", " ").replace('\n', "&#xA;");
+    let hashes = "#".repeat(node.depth as usize);
+    if state.options.close_atx {
+        format!("{} {} {}", hashes, content, hashes)
+    } else {
+        format!("{} {}", hashes, content)
     }
 }
 
@@ -107,7 +117,18 @@ fn handle_list(state: &mut State, node: &mdast::List) -> String {
     let old_bullet = state.bullet_current;
 
     if !node.ordered {
-        state.bullet_current = Some(state.options.bullet);
+        // Alternate bullets only when bullet_last_used == our preferred bullet.
+        // bullet_last_used is set AFTER children are processed (matches JS behavior),
+        // so it reflects the PREVIOUSLY completed sibling list's bullet.
+        // Between non-list flow children, bullet_last_used is reset to None.
+        let bullet = if state.bullet_last_used == Some(state.options.bullet) {
+            // Use an alternate bullet to avoid ambiguity.
+            if state.options.bullet == '*' { '-' } else { '*' }
+        } else {
+            state.options.bullet
+        };
+        state.bullet_current = Some(bullet);
+        // bullet_last_used will be set AFTER processing children (below).
     }
 
     for (i, child) in node.children.iter().enumerate() {
@@ -117,20 +138,29 @@ fn handle_list(state: &mut State, node: &mdast::List) -> String {
             } else {
                 node.start.unwrap_or(1)
             };
-            format!("{}{} ", number, state.options.bullet_ordered)
+            format!("{}{}", number, state.options.bullet_ordered)
         } else {
-            format!("{} ", state.bullet_current.unwrap_or('*'))
+            format!("{}", state.bullet_current.unwrap_or('*'))
         };
 
-        let content = handle(state, child);
-        let indent = " ".repeat(prefix.len());
+        let content = handle_list_item_with_parent(state, child, node);
+        // Reset bullet_last_used after each list item to prevent state from
+        // nested lists in one item leaking into sibling items' nested lists.
+        state.bullet_last_used = None;
+        let indent_width = prefix.len() + 1; // +1 for the space after bullet
+        let indent = " ".repeat(indent_width);
 
         let mut lines: Vec<String> = content.lines().map(String::from).collect();
         if lines.is_empty() {
             lines.push(String::new());
         }
 
-        let first = format!("{}{}", prefix, lines[0]);
+        // Don't add trailing space if the first line is empty (empty list item).
+        let first = if lines[0].is_empty() {
+            prefix.clone()
+        } else {
+            format!("{} {}", prefix, lines[0])
+        };
         let rest: Vec<String> = lines[1..]
             .iter()
             .map(|line| {
@@ -150,18 +180,51 @@ fn handle_list(state: &mut State, node: &mdast::List) -> String {
         result.push(item);
     }
 
+    // Set bullet_last_used AFTER processing children (same as JS: `state.bulletLastUsed = bullet`).
+    if !node.ordered {
+        state.bullet_last_used = state.bullet_current;
+    }
     state.bullet_current = old_bullet;
 
     let separator = if node.spread { "\n\n" } else { "\n" };
     result.join(separator)
 }
 
+/// Render a list item, respecting whether the parent list is spread.
+fn handle_list_item_with_parent(state: &mut State, node: &Node, parent: &mdast::List) -> String {
+    let spread = parent.spread || if let Node::ListItem(li) = node { li.spread } else { false };
+
+    let content = if let Node::ListItem(li) = node {
+        let mut content = super::flow::container_flow_tight(state, &li.children, spread);
+
+        if let Some(checked) = li.checked {
+            let checkbox = if checked { "[x]" } else { "[ ]" };
+            if content.is_empty() {
+                content = checkbox.to_string();
+            } else {
+                content = format!("{} {}", checkbox, content);
+            }
+        }
+        content
+    } else {
+        handle(state, node)
+    };
+
+    content
+}
+
 fn handle_list_item(state: &mut State, node: &mdast::ListItem) -> String {
-    let mut content = super::flow::container_flow(state, &node.children);
+    // This is called directly (not via handle_list), so we don't know spread.
+    // Default to the node's own spread setting.
+    let mut content = super::flow::container_flow_tight(state, &node.children, node.spread);
 
     if let Some(checked) = node.checked {
-        let checkbox = if checked { "[x] " } else { "[ ] " };
-        content = format!("{}{}", checkbox, content);
+        let checkbox = if checked { "[x]" } else { "[ ]" };
+        if content.is_empty() {
+            content = checkbox.to_string();
+        } else {
+            content = format!("{} {}", checkbox, content);
+        }
     }
 
     content
@@ -216,9 +279,17 @@ fn handle_definition(node: &mdast::Definition) -> String {
 // Phrasing (inline) handlers
 // ---------------------------------------------------------------------------
 
-fn handle_text(_state: &mut State, node: &mdast::Text) -> String {
-    // TODO: Run through safe() for context-sensitive escaping.
-    node.value.clone()
+fn handle_text(state: &mut State, node: &mdast::Text) -> String {
+    // Escape Markdown syntax characters in phrasing content.
+    // Port of mdast-util-to-markdown's `safe()` function.
+    let escaped = super::escape::escape_phrasing(&node.value);
+    // Apply at-break escaping if this text is at the start of a block.
+    if state.at_break {
+        state.at_break = false;
+        super::escape::escape_at_break_start(escaped)
+    } else {
+        escaped
+    }
 }
 
 fn handle_emphasis(state: &mut State, node: &mdast::Emphasis) -> String {
@@ -230,19 +301,17 @@ fn handle_emphasis(state: &mut State, node: &mdast::Emphasis) -> String {
 fn handle_strong(state: &mut State, node: &mdast::Strong) -> String {
     let marker = state.options.strong;
     let content = super::phrasing::container_phrasing(state, &node.children);
-    format!(
-        "{}{}{}{}{}{}",
-        marker, marker, content, marker, marker, ""
-    )
+    format!("{0}{0}{1}{0}{0}", marker, content)
 }
 
 fn handle_inline_code(node: &mdast::InlineCode) -> String {
     // Choose backtick count to avoid conflicts with content.
     let max_run = longest_backtick_run(&node.value);
-    let ticks: String = std::iter::repeat('`').take(max_run + 1).collect();
+    let ticks = "`".repeat(max_run + 1);
 
-    let needs_space =
-        node.value.starts_with('`') || node.value.ends_with('`') || node.value.starts_with(' ') && node.value.ends_with(' ') && !node.value.trim().is_empty();
+    let needs_space = node.value.starts_with('`')
+        || node.value.ends_with('`')
+        || (node.value.starts_with(' ') && node.value.ends_with(' ') && !node.value.trim().is_empty());
 
     if needs_space {
         format!("{} {} {}", ticks, node.value, ticks)
@@ -256,7 +325,25 @@ fn handle_break() -> String {
 }
 
 fn handle_link(state: &mut State, node: &mdast::Link) -> String {
+    // Trim surrounding whitespace from link text (whitespace collapses to spaces
+    // at the edges of inline content from HTML whitespace normalization).
     let content = super::phrasing::container_phrasing(state, &node.children);
+    let content = content.trim();
+
+    // Try to format as autolink: <url> or <email>
+    // Port of mdast-util-to-markdown/lib/util/format-link-as-autolink.js
+    if !state.options.resource_link
+        && !node.url.is_empty()
+        && node.title.is_none()
+        && node.children.len() == 1
+        && matches!(&node.children[0], mdast::Node::Text(_))
+        && (content == node.url.as_str() || format!("mailto:{}", content) == node.url)
+        && node.url.contains(':')
+        && !node.url.chars().any(|c| c <= ' ' || c == '<' || c == '>' || c == '\x7f')
+    {
+        return format!("<{}>", content);
+    }
+
     match &node.title {
         Some(title) => format!("[{}]({} \"{}\")", content, node.url, title),
         None => format!("[{}]({})", content, node.url),
@@ -303,7 +390,8 @@ fn handle_table(state: &mut State, node: &mdast::Table) -> String {
         return String::new();
     }
 
-    // Collect all cell contents.
+    // Collect all cell contents. Trim leading/trailing whitespace from each cell
+    // (whitespace from HTML indentation between elements within cells).
     let mut rows: Vec<Vec<String>> = Vec::new();
     for row in &node.children {
         if let Node::TableRow(tr) = row {
@@ -312,7 +400,9 @@ fn handle_table(state: &mut State, node: &mdast::Table) -> String {
                 .iter()
                 .map(|cell| {
                     if let Node::TableCell(tc) = cell {
-                        super::phrasing::container_phrasing(state, &tc.children)
+                        let content = super::phrasing::container_phrasing(state, &tc.children);
+                        // Hard breaks (\<LF>) → space; bare newlines → &#xA; escape.
+                        content.trim().replace("\\\n", " ").replace('\n', "&#xA;")
                     } else {
                         String::new()
                     }
@@ -328,7 +418,7 @@ fn handle_table(state: &mut State, node: &mdast::Table) -> String {
 
     // Determine column count and widths.
     let col_count = rows.iter().map(|r| r.len()).max().unwrap_or(0);
-    let mut col_widths = vec![3usize; col_count]; // minimum 3 for separator
+    let mut col_widths = vec![1usize; col_count]; // minimum 1
     for row in &rows {
         for (i, cell) in row.iter().enumerate() {
             if i < col_count {
@@ -341,7 +431,7 @@ fn handle_table(state: &mut State, node: &mdast::Table) -> String {
 
     // Header row.
     let header = &rows[0];
-    let header_line = format_row(header, &col_widths, col_count);
+    let header_line = format_row(header, &col_widths, col_count, &node.align);
     lines.push(header_line);
 
     // Separator row.
@@ -356,30 +446,61 @@ fn handle_table(state: &mut State, node: &mdast::Table) -> String {
 
     // Data rows.
     for row in rows.iter().skip(1) {
-        lines.push(format_row(row, &col_widths, col_count));
+        lines.push(format_row(row, &col_widths, col_count, &node.align));
     }
 
     lines.join("\n")
 }
 
-fn format_row(cells: &[String], widths: &[usize], col_count: usize) -> String {
+fn format_row(cells: &[String], widths: &[usize], col_count: usize, aligns: &[Option<crate::mdast::AlignKind>]) -> String {
     let padded: Vec<String> = (0..col_count)
         .map(|i| {
             let content = cells.get(i).map(|s| s.as_str()).unwrap_or("");
-            format!("{:width$}", content, width = widths[i])
+            let width = widths[i];
+            let align = aligns.get(i).copied().flatten();
+            pad_cell(content, width, align)
         })
         .collect();
     format!("| {} |", padded.join(" | "))
 }
 
+fn pad_cell(content: &str, width: usize, align: Option<crate::mdast::AlignKind>) -> String {
+    use crate::mdast::AlignKind;
+    let len = content.chars().count();
+    let padding = width.saturating_sub(len);
+    match align {
+        Some(AlignKind::Right) => {
+            format!("{}{}", " ".repeat(padding), content)
+        }
+        Some(AlignKind::Center) => {
+            // JS uses ceiling division for left pad.
+            let left_pad = padding.div_ceil(2);
+            let right_pad = padding / 2;
+            format!("{}{}{}", " ".repeat(left_pad), content, " ".repeat(right_pad))
+        }
+        _ => {
+            // Left-align (default): pad right
+            format!("{}{}", content, " ".repeat(padding))
+        }
+    }
+}
+
 fn format_separator(width: usize, align: Option<crate::mdast::AlignKind>) -> String {
     use crate::mdast::AlignKind;
-    let dashes: String = std::iter::repeat('-').take(width).collect();
     match align {
-        Some(AlignKind::Left) => format!(":{}", &dashes[1..]),
-        Some(AlignKind::Right) => format!("{}:", &dashes[1..]),
-        Some(AlignKind::Center) => format!(":{}:", &dashes[2..]),
-        None => dashes,
+        Some(AlignKind::Left) => {
+            // Minimum: :- (2 chars). Extra dashes fill up to width.
+            format!(":{}", "-".repeat(width.saturating_sub(1)))
+        }
+        Some(AlignKind::Right) => {
+            // Minimum: -: (2 chars). Extra dashes fill up to width.
+            format!("{}:", "-".repeat(width.saturating_sub(1)))
+        }
+        Some(AlignKind::Center) => {
+            // Minimum: :-: (3 chars). Extra dashes between colons fill up to width.
+            format!(":{}:", "-".repeat(width.saturating_sub(2)))
+        }
+        None => "-".repeat(width),
     }
 }
 

@@ -183,6 +183,12 @@ pub struct TableRow {
 #[derive(Debug, Clone, PartialEq)]
 pub struct TableCell {
     pub children: Vec<Node>,
+    /// Column span (from HTML colspan attribute); used during transformation, not serialization.
+    #[doc(hidden)]
+    pub colspan: Option<u32>,
+    /// Row span (from HTML rowspan attribute); used during transformation, not serialization.
+    #[doc(hidden)]
+    pub rowspan: Option<u32>,
 }
 
 /// Footnote definition (`[^id]: ...`).
@@ -300,13 +306,16 @@ impl Node {
     }
 
     /// Whether this node is phrasing (inline) content.
+    ///
+    /// Note: `Html` is flow content (block-level), not phrasing. HTML comments
+    /// and raw HTML between block elements should be treated as block nodes.
+    /// This matches mdast-util-phrasing behavior.
     pub fn is_phrasing(&self) -> bool {
         matches!(
             self,
             Node::Break(_)
                 | Node::Delete(_)
                 | Node::Emphasis(_)
-                | Node::Html(_)
                 | Node::Image(_)
                 | Node::ImageReference(_)
                 | Node::InlineCode(_)
@@ -361,11 +370,11 @@ mod tests {
     }
 
     #[test]
-    fn test_html_is_both_phrasing_and_flow() {
+    fn test_html_is_flow_not_phrasing() {
         let node = Node::Html(Html {
             value: "<!-- comment -->".into(),
         });
-        assert!(node.is_phrasing());
+        assert!(!node.is_phrasing());
         assert!(node.is_flow());
     }
 

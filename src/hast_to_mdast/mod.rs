@@ -20,24 +20,32 @@ use url::Url;
 use crate::mdast;
 
 /// Options for the HTML → MDAST transformation.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct TransformOptions {
     /// Whether to preserve newlines in whitespace normalization.
     pub newlines: bool,
+    /// Symbol for checked checkboxes (default: "[x]").
+    pub checked: Option<String>,
+    /// Symbol for unchecked checkboxes (default: "[ ]").
+    pub unchecked: Option<String>,
+    /// Quote character pairs for `<q>` elements, in nesting order.
+    /// Each string is 1 or 2 characters: open (and close if different).
+    /// Default: `['"']` (ASCII double-quote).
+    pub quotes: Vec<String>,
 }
 
-impl Default for TransformOptions {
-    fn default() -> Self {
-        Self { newlines: false }
-    }
-}
 
 /// Transformation state threaded through all handlers.
 pub(crate) struct State {
     /// Base URL from the first `<base>` element encountered.
     pub frozen_base_url: Option<Url>,
+    /// Whether the first `<base>` element has been seen (regardless of href).
+    /// Per HTML5 spec, only the first `<base>` element is effective.
+    pub base_found: bool,
     /// Whether we're currently inside a table (nested tables → text).
     pub in_table: bool,
+    /// Whether we're inside a whitespace-preserving element (<pre>, etc.).
+    pub in_pre: bool,
     /// Nesting depth for `<q>` elements (cycles quote characters).
     pub q_nesting: usize,
     /// Elements indexed by their `id` attribute.
@@ -50,7 +58,9 @@ impl State {
     fn new(options: TransformOptions) -> Self {
         Self {
             frozen_base_url: None,
+            base_found: false,
             in_table: false,
+            in_pre: false,
             q_nesting: 0,
             element_by_id: HashMap::new(),
             options,
@@ -59,6 +69,9 @@ impl State {
 
     /// Resolve a URL against the frozen base URL.
     pub fn resolve(&self, raw: &str) -> String {
+        if raw.is_empty() {
+            return String::new();
+        }
         if let Some(base) = &self.frozen_base_url {
             if let Ok(resolved) = base.join(raw) {
                 return resolved.to_string();
@@ -79,13 +92,14 @@ pub(crate) fn transform(html: &str, options: TransformOptions) -> mdast::Node {
     // Transform.
     let children = handlers::all(&mut state, &dom.document);
     let children = wrap::wrap(children);
-    whitespace::post_process_whitespace(&mut mdast::Node::Root(mdast::Root { children: children.clone() }));
+    let mut root = mdast::Node::Root(mdast::Root { children });
+    whitespace::post_process_whitespace(&mut root);
 
-    mdast::Node::Root(mdast::Root { children })
+    root
 }
 
 /// Parse an HTML string into an html5ever RcDom.
-fn parse_html(html: &str) -> RcDom {
+pub(crate) fn parse_html(html: &str) -> RcDom {
     let opts = ParseOpts {
         tree_builder: TreeBuilderOpts {
             drop_doctype: true,
