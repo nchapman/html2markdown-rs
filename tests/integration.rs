@@ -22,3 +22,4 @@ fn test_options_are_applied() {
     let result = convert_with("<h1>Title</h1>", &options).unwrap();
     assert!(result.contains("Title"));
 }
+

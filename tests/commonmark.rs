@@ -587,8 +587,9 @@ const IGNORED_EXAMPLES: &[u32] = &[
     // Image alt text containing link syntax `[foo](uri2)`: pulldown-cmark
     // evaluates the nested link and uses only its text as the alt.
     522,
-    // Bracket characters inside HTML attribute values confuse link parsing.
-    526, 528, 538, 540,
+    // Unknown <bar> element in attribute value: html5ever discards unknown
+    // inline elements so their angle brackets are lost; can't reconstruct.
+    526, 538,
     // Raw inline HTML (615–635): html5ever normalizes/discards unknown or
     // invalid inline elements that the spec passes through verbatim.
     615, 616, 617, 618, 619, 620, 621, 622, 623, 624, 625, 626, 627, 628,
