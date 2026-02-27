@@ -4,15 +4,13 @@
 // convert it to Markdown with our converter, render that Markdown back to HTML
 // with pulldown-cmark, then compare the two HTML strings after normalization.
 //
-// Structural non-round-trippable categories (ignored):
-//
-//   HTML blocks (examples 148–193): The spec HTML for these examples is the
-//   verbatim HTML block from the Markdown input, passed through unchanged.
-//   html5ever parses it as real HTML and restructures it, so the round-trip
-//   can never produce the same bytes.
-//
-//   Raw inline HTML (examples 615–635): Similar — inline elements like
-//   <bab>, <c2c> that html5ever normalizes or discards.
+// Both the spec HTML (expected) and the round-trip HTML (actual) are first
+// passed through `html5ever_parse_serialize`, which re-parses and re-serializes
+// the HTML using html5ever. This ensures both sides go through the same DOM
+// transformations, so differences caused by html5ever's HTML5-compliant
+// restructuring (e.g. hoisting <pre> out of <table>, discarding unknown
+// elements) cancel out — we only catch cases where our converter loses or
+// misrepresents content that html5ever does preserve.
 //
 // Reference: refs/commonmark-spec/spec.txt (CommonMark 0.31.2, 657 examples)
 
@@ -87,6 +85,56 @@ fn parse_spec() -> Vec<SpecExample> {
     }
 
     examples
+}
+
+// ── html5ever round-trip ──────────────────────────────────────────────────────
+//
+// Parse the HTML with html5ever and serialize the body children back to HTML.
+// This applies the same DOM transformations our converter sees, so both the
+// "expected" and "actual" sides go through identical restructuring.
+
+fn html5ever_parse_serialize(html: &str) -> String {
+    use html5ever::serialize::{serialize, SerializeOpts, TraversalScope};
+    use html5ever::tendril::TendrilSink;
+    use html5ever::{parse_document, ParseOpts};
+    use markup5ever_rcdom::{NodeData, RcDom, SerializableHandle};
+
+    let dom = parse_document(RcDom::default(), ParseOpts::default())
+        .from_utf8()
+        .read_from(&mut html.as_bytes())
+        .unwrap();
+
+    // Walk document → <html> → <body>, then serialize each body child.
+    let document = dom.document.clone();
+    let mut output = Vec::new();
+
+    'outer: for node in document.children.borrow().iter() {
+        if let NodeData::Element { ref name, .. } = node.data {
+            if name.local.as_ref() == "html" {
+                for inner in node.children.borrow().iter() {
+                    if let NodeData::Element { ref name, .. } = inner.data {
+                        if name.local.as_ref() == "body" {
+                            for child in inner.children.borrow().iter() {
+                                let handle = SerializableHandle::from(child.clone());
+                                serialize(
+                                    &mut output,
+                                    &handle,
+                                    SerializeOpts {
+                                        traversal_scope: TraversalScope::IncludeNode,
+                                        ..Default::default()
+                                    },
+                                )
+                                .unwrap();
+                            }
+                            break 'outer;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    String::from_utf8(output).unwrap()
 }
 
 // ── HTML normalizer ───────────────────────────────────────────────────────────
@@ -553,66 +601,77 @@ fn is_block_tag(tag: &str) -> bool {
 
 /// Examples that are structurally impossible to round-trip.
 /// These are skipped (not failed) in the main test.
+// Both sides of each test go through html5ever_parse_serialize, which cancels
+// out DOM restructuring differences. The examples below still fail because of
+// genuine semantic losses that survive normalization:
+//
+//   URL encoding: pulldown-cmark percent-encodes characters (ö → %C3%B6,
+//   backslash stripped) that html5ever preserves literally in href attributes.
+//   Even after both sides are html5ever-normalized, the URL representations
+//   differ because pulldown-cmark normalizes URLs on the way out.
+//
+//   HTML blocks (148–193 subset): html5ever restructures the spec HTML, but
+//   our converter's Markdown representation of that restructured DOM produces
+//   semantically different HTML when round-tripped through pulldown-cmark.
+//   E.g. <pre> inside a table cell becomes a GFM code block, which serializes
+//   differently from html5ever's <pre> representation.
+//
+//   Unknown element preservation: html5ever preserves unknown elements
+//   (<bar>, <bab>, <c2c>) in its serialized output, but our converter drops
+//   them (treats as transparent). The html5ever-normalized expected contains
+//   the unknown tags; our actual does not.
+//
+//   pulldown-cmark rendering artifacts: structural choices pulldown-cmark
+//   makes when rendering Markdown back to HTML (thematic break hoisted out of
+//   list, image alt="" always emitted, etc.).
+//
+//   Literal newlines / special chars in href: html5ever drops newlines in
+//   href attributes; our converter can't round-trip them into valid Markdown.
 const IGNORED_EXAMPLES: &[u32] = &[
-    // Backslash in URL: html5ever decodes `\)` in href → can't be reconstructed.
+    // URL encoding: pulldown-cmark strips backslash from href; html5ever keeps it.
     21,
-    // HTML entity in href: html5ever decodes `&ouml;` → `ö` → percent-encoded
-    // differently than the original entity form.
+    // URL encoding: `&ouml;` decoded to `ö` by html5ever, percent-encoded to
+    // `%C3%B6` by pulldown-cmark; the two URL forms don't match.
     31,
-    // Thematic break (`***`) inside list item: pulldown-cmark treats it as a
-    // top-level thematic break rather than list-item content.
+    // pulldown-cmark hoists `<hr>` out of `<li>` — `* ***` renders as list
+    // followed by top-level thematic break, not a list item containing one.
     61,
-    // HTML blocks (148–193): spec HTML is verbatim Markdown HTML block
-    // content; html5ever restructures it so the round-trip is undefined.
-    // #169 and #181 happen to round-trip correctly and are unignored.
-    148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161,
-    162, 163, 164, 165, 166, 167, 168, 170, 171, 172, 173, 174, 175,
-    176, 177, 178, 179, 180, 182, 183, 184, 185, 186, 187, 188, 189,
-    190, 191, 192, 193,
-    // `<bar>` element in text: html5ever loses the unknown element's angle
-    // brackets; can't distinguish from plain text after the round-trip.
+    // HTML blocks: html5ever restructures DOM; our Markdown representation
+    // of the restructured DOM produces different HTML when re-parsed.
+    148, 149, 150, 151, 152, 153, 154, 155, 159, 160, 161, 162, 163, 164,
+    165, 166, 167, 168, 170, 171, 173, 176, 177, 179, 180, 182, 186, 187,
+    188, 189, 190, 191, 192, 193,
+    // Unknown element `<bar>`: html5ever preserves it in serialization;
+    // our converter drops it (treats unknown elements as transparent).
     203,
-    // Backtick in link destination: unclosed <a> in spec HTML causes html5ever
-    // to produce duplicate MDAST link nodes; unfixable.
+    // Backtick in href + unclosed `<a>`: html5ever produces duplicate link
+    // nodes; pulldown-cmark percent-encodes `` ` `` as `%60`; double mismatch.
     346,
-    // `*` in image title: pulldown-cmark always emits alt="" on images but
-    // the spec HTML has no alt attribute; normalizer sees the difference.
+    // pulldown-cmark always emits alt="" on images; spec HTML has no alt attr.
     477,
-    // `**` / `__` in link href: unclosed <a> tags in spec HTML cause
-    // html5ever to produce duplicate MDAST link nodes; unfixable.
+    // `**` / `__` in href + unclosed `<a>`: same duplicate-link + URL issue.
     478, 479,
-    // Newline inside angle-bracket link URL: html5ever drops the newline.
+    // Newline inside href: html5ever drops it; can't reconstruct a valid
+    // Markdown angle-bracket URL destination with a literal newline.
     493,
-    // `<foo>` in text: pulldown-cmark emits it as a tag; normalizer treats it
-    // as a tag rather than text, so `&lt;` vs `<foo>` can't be reconciled.
-    495,
-    // `<b>` bold element and other formatting in paragraph text context.
+    // Malformed link syntax with `<b>` element: html5ever preserves `<b>` tag
+    // in its serialization, but we convert `<b>` → `**bold**`; the resulting
+    // `<strong>` doesn't match the `<b>` in the html5ever-normalized expected.
     496,
-    // Image alt text containing link syntax `[foo](uri2)`: pulldown-cmark
-    // evaluates the nested link and uses only its text as the alt.
-    522,
-    // Unknown <bar> element in attribute value: html5ever discards unknown
-    // inline elements so their angle brackets are lost; can't reconstruct.
+    // Unknown elements in link destinations: html5ever preserves `<bar>` /
+    // `<responsive-image>` tags; our converter drops them.
     526, 538,
-    // Raw inline HTML (#615–619): html5ever discards unknown inline elements
-    // (e.g. <bab>, <responsive-image>) so angle brackets are lost; unfixable.
+    // Unknown inline elements (<bab>, <c2c>, etc.): html5ever preserves them
+    // in its serialized output; our converter drops them as unknown elements.
     615, 616, 617, 618, 619,
-    // (#620–624, #626–627, #634–635): "invalid" raw HTML that CommonMark
-    // escapes to &lt;...&gt; — html5ever sees plain text and these round-trip.
-    // Stray end tags (#625): html5ever discards them; we emit empty string.
+    // Stray end tags: html5ever inserts empty sibling elements when it repairs
+    // them; the resulting structure doesn't match our empty-string output.
     625,
-    // Invalid/malformed HTML comments (#628): html5ever reinterprets comment
-    // boundaries differently; also processing instructions (#629) and
-    // declarations (#630) are converted to comments by html5ever.
-    628, 629, 630,
-    // CDATA section (#631): html5ever partially parses it as a comment.
-    631,
-    // Backslash in href (#633) and entity in href (#632): html5ever decodes
-    // them so we lose the original representation.
+    // Backslash / entity in href: pulldown-cmark drops the backslash or
+    // percent-encodes the entity; the URL forms differ after normalization.
     632, 633,
-    // Literal newline inside href attribute: CommonMark angle-bracket link
-    // destinations explicitly forbid line endings, so these URLs have no valid
-    // Markdown representation. Percent-encoding would change the href value.
+    // Literal newline inside href attribute: no valid Markdown representation;
+    // our angle-bracket URL with embedded newline doesn't round-trip cleanly.
     645, 646,
 ];
 
@@ -643,15 +702,19 @@ fn test_example(ex: &SpecExample) -> Result<(), String> {
     pulldown_cmark::html::push_html(&mut actual_html, parser);
 
     // Step 3: normalize both sides and compare.
-    let expected = normalize_html(&ex.html);
-    let actual = normalize_html(&actual_html);
+    // Both sides go through html5ever_parse_serialize so that html5ever's DOM
+    // transformations (element hoisting, unknown-tag handling, URL decoding,
+    // etc.) cancel out — we only catch cases where our converter loses content
+    // that html5ever does preserve.
+    let expected = normalize_html(&html5ever_parse_serialize(&ex.html));
+    let actual = normalize_html(&html5ever_parse_serialize(&actual_html));
 
     if actual == expected {
         Ok(())
     } else {
         Err(format!(
             "expected:\n{expected}\n\nactual:\n{actual}\n\nspec HTML (input):\n{}\n\nour Markdown:\n{markdown}",
-            ex.html
+            ex.html,
         ))
     }
 }
