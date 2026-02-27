@@ -325,10 +325,11 @@ fn handle_break() -> String {
 }
 
 fn handle_link(state: &mut State, node: &mdast::Link) -> String {
-    // Trim surrounding whitespace from link text (whitespace collapses to spaces
-    // at the edges of inline content from HTML whitespace normalization).
+    // Trim only leading whitespace — trailing is handled by MDAST normalization
+    // (normalize_inline_boundaries in whitespace.rs) which moves the space
+    // inside the link when it is the sole separator before the next token.
     let content = super::phrasing::container_phrasing(state, &node.children);
-    let content = content.trim();
+    let content = content.trim_start();
 
     // Try to format as autolink: <url> or <email>
     // Port of mdast-util-to-markdown/lib/util/format-link-as-autolink.js

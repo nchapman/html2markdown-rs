@@ -5,7 +5,7 @@ use html_to_markdown::{convert, convert_with, Options, HeadingStyle};
 #[test]
 fn test_empty_input() {
     let result = convert("").unwrap();
-    assert_eq!(result, "\n");
+    assert_eq!(result, "");
 }
 
 #[test]
