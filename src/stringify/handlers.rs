@@ -311,7 +311,10 @@ fn handle_html(node: &mdast::Html) -> String {
 }
 
 fn handle_definition(node: &mdast::Definition) -> String {
-    let label = node.label.as_deref().unwrap_or(&node.identifier);
+    let raw_label = node.label.as_deref().unwrap_or(&node.identifier);
+    // Escape `]` (and other phrasing chars) so it doesn't prematurely close
+    // the `[label]` bracket. Port of mdast-util-to-markdown definition.js.
+    let label = super::escape::escape_link_text(raw_label);
     let url = format_link_url(&node.url);
     match &node.title {
         Some(title) => format!("[{}]: {} \"{}\"", label, url, escape_link_title(title)),
@@ -421,10 +424,13 @@ fn handle_link(state: &mut State, node: &mdast::Link) -> String {
 }
 
 fn handle_image(node: &mdast::Image) -> String {
+    // Escape `]` and other phrasing chars in alt text to prevent premature
+    // bracket close. Port of mdast-util-to-markdown image.js safe() call.
+    let alt = super::escape::escape_link_text(&node.alt);
     let url = format_link_url(&node.url);
     match &node.title {
-        Some(title) => format!("![{}]({} \"{}\")", node.alt, url, escape_link_title(title)),
-        None => format!("![{}]({})", node.alt, url),
+        Some(title) => format!("![{}]({} \"{}\")", alt, url, escape_link_title(title)),
+        None => format!("![{}]({})", alt, url),
     }
 }
 

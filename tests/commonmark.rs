@@ -572,11 +572,14 @@ const IGNORED_EXAMPLES: &[u32] = &[
     // `<bar>` element in text: html5ever loses the unknown element's angle
     // brackets; can't distinguish from plain text after the round-trip.
     203,
-    // Backtick in link destination + malformed HTML causes two MDAST nodes.
+    // Backtick in link destination: unclosed <a> in spec HTML causes html5ever
+    // to produce duplicate MDAST link nodes; unfixable.
     346,
-    // `*` in image title attribute; `alt` attribute presence difference.
+    // `*` in image title: pulldown-cmark always emits alt="" on images but
+    // the spec HTML has no alt attribute; normalizer sees the difference.
     477,
-    // `**` / `__` in link href creates ambiguous emphasis + link markdown.
+    // `**` / `__` in link href: unclosed <a> tags in spec HTML cause
+    // html5ever to produce duplicate MDAST link nodes; unfixable.
     478, 479,
     // Newline inside angle-bracket link URL: html5ever drops the newline.
     493,
