@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html>
+<body>
+<article>
+  <h1>Getting Started with Rust</h1>
+
+  <p>Rust is a systems programming language focused on three goals: safety, speed, and concurrency.
+  It accomplishes these goals without a garbage collector, making it useful for a number of use cases
+  other languages aren't good at: embedding in other languages, programs with specific space and time
+  requirements, and writing low-level code, like device drivers and operating systems.</p>
+
+  <p>Rust improves on current languages targeting this space by having a number of compile-time safety
+  checks with no runtime overhead, while eliminating all data races. Rust also aims to achieve
+  <em>zero-cost abstractions</em> even though some of these abstractions feel like those of a high-level
+  language. Even then, Rust still allows the fine-grained control that a low-level language would give.</p>
+
+  <h2>Installation</h2>
+
+  <p>The first step to using Rust is to install it. Generally speaking, you'll need an internet connection
+  to run the commands in this chapter, as we'll be downloading Rust from the internet.</p>
+
+  <p>We'll be showing off a number of commands using a terminal, and those lines all start with
+  <code>$</code>. You don't need to type in the <code>$</code> characters; they indicate the start of
+  each command. You'll see many tutorials and examples around the web that follow this convention:
+  <code>$</code> for commands run as a regular user, and <code>#</code> for commands you should be
+  running as an administrator.</p>
+
+  <h3>Installing on Linux or Mac</h3>
+
+  <p>If you're on Linux or a Mac, all you need to do is open a terminal and type this:</p>
+
+  <pre><code>$ curl https://sh.rustup.rs -sSf | sh</code></pre>
+
+  <p>This will download a script, and start the installation. You may be prompted for your password.
+  If it all goes well, you'll see this appear:</p>
+
+  <blockquote>
+    <p>Rust is installed now. Great!</p>
+  </blockquote>
+
+  <h3>Installing on Windows</h3>
+
+  <p>On Windows, go to <a href="https://rustup.rs/">rustup.rs</a> and follow the instructions to download
+  <strong>rustup-init.exe</strong>. Run that and follow the instructions it gives you.</p>
+
+  <p>The rest of the Windows-specific commands in the book will assume that you are using
+  <code>cmd</code> as your shell. If you use a different shell, you may be able to run the same commands
+  that Linux and Mac users do.</p>
+
+  <h2>Hello, World!</h2>
+
+  <p>Now that you have Rust installed, let's write your first Rust program. It's traditional when learning
+  a new language to write a little program that prints the text "Hello, world!" to the screen, and in
+  this section, we'll follow that tradition.</p>
+
+  <p>The nice thing about starting with such a simple example is that you can quickly verify that your
+  compiler is installed, and that it's working properly. Printing information to the screen is also
+  just a pretty common thing to do, so practicing it early is good.</p>
+
+  <h3>Creating a Project File</h3>
+
+  <p>First, make a file to put your Rust code in. Rust files always end in a <em>.rs</em> extension.
+  If you're using more than one word in your filename, use an underscore to separate them; for example,
+  use <em>hello_world.rs</em> rather than <em>helloworld.rs</em>.</p>
+
+  <p>Now open the <em>hello_world.rs</em> file you just created, and type the following code:</p>
+
+  <pre><code class="language-rust">fn main() {
+    println!("Hello, world!");
+}</code></pre>
+
+  <p>Save the file, and go back to your terminal window. On Linux or OSX, enter the following commands:</p>
+
+  <pre><code>$ rustc hello_world.rs
+$ ./hello_world
+Hello, world!</code></pre>
+
+  <h2>Key Features</h2>
+
+  <ul>
+    <li><strong>Memory safety</strong> — Rust's ownership system guarantees memory safety at compile time</li>
+    <li><strong>Zero-cost abstractions</strong> — High-level constructs compile down to efficient machine code</li>
+    <li><strong>Fearless concurrency</strong> — The type system prevents data races at compile time</li>
+    <li><strong>No garbage collector</strong> — Predictable performance without GC pauses</li>
+    <li><strong>Interoperability</strong> — Easy FFI with C and other languages</li>
+  </ul>
+
+  <p>Rust has a number of features that are unique to it, and some that it shares with other languages.
+  Let's have a look at what makes Rust special, and how it achieves its goals of safety, speed, and
+  concurrency.</p>
+
+  <figure>
+    <img src="https://www.rust-lang.org/logos/rust-logo-blk.svg" alt="Rust programming language logo">
+    <figcaption>The Rust programming language logo</figcaption>
+  </figure>
+
+  <h2>Learning More</h2>
+
+  <p>The best way to learn Rust is to read <a href="https://doc.rust-lang.org/book/">The Rust Programming
+  Language</a>, also known as "the book". It covers everything from basic syntax to advanced features
+  like lifetimes and unsafe code.</p>
+
+  <p>You can also find help in the <a href="https://users.rust-lang.org/">Rust community forums</a>,
+  the <a href="https://discord.gg/rust-lang">Rust Discord server</a>, and on
+  <a href="https://stackoverflow.com/questions/tagged/rust">Stack Overflow</a>.</p>
+</article>
+</body>
+</html>

@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html>
+<body>
+<article>
+  <h1>Getting Started with Rust</h1>
+
+  <p>Rust is a systems programming language focused on three goals: safety, speed, and concurrency.
+  It accomplishes these goals without a garbage collector, making it useful for a number of use cases
+  other languages aren't good at: embedding in other languages, programs with specific space and time
+  requirements, and writing low-level code, like device drivers and operating systems.</p>
+
+  <p>Rust improves on current languages targeting this space by having a number of compile-time safety
+  checks with no runtime overhead, while eliminating all data races. Rust also aims to achieve
+  <em>zero-cost abstractions</em> even though some of these abstractions feel like those of a high-level
+  language. Even then, Rust still allows the fine-grained control that a low-level language would give.</p>
+
+  <h2>Installation</h2>
+
+  <p>The first step to using Rust is to install it. Generally speaking, you'll need an internet connection
+  to run the commands in this chapter, as we'll be downloading Rust from the internet.</p>
+
+  <p>We'll be showing off a number of commands using a terminal, and those lines all start with
+  <code>$</code>. You don't need to type in the <code>$</code> characters; they indicate the start of
+  each command. You'll see many tutorials and examples around the web that follow this convention:
+  <code>$</code> for commands run as a regular user, and <code>#</code> for commands you should be
+  running as an administrator.</p>
+
+  <h3>Installing on Linux or Mac</h3>
+
+  <p>If you're on Linux or a Mac, all you need to do is open a terminal and type this:</p>
+
+  <pre><code>$ curl https://sh.rustup.rs -sSf | sh</code></pre>
+
+  <p>This will download a script, and start the installation. You may be prompted for your password.
+  If it all goes well, you'll see this appear:</p>
+
+  <blockquote>
+    <p>Rust is installed now. Great!</p>
+  </blockquote>
+
+  <h3>Installing on Windows</h3>
+
+  <p>On Windows, go to <a href="https://rustup.rs/">rustup.rs</a> and follow the instructions to download
+  <strong>rustup-init.exe</strong>. Run that and follow the instructions it gives you.</p>
+
+  <p>The rest of the Windows-specific commands in the book will assume that you are using
+  <code>cmd</code> as your shell. If you use a different shell, you may be able to run the same commands
+  that Linux and Mac users do.</p>
+
+  <h2>Hello, World!</h2>
+
+  <p>Now that you have Rust installed, let's write your first Rust program. It's traditional when learning
+  a new language to write a little program that prints the text "Hello, world!" to the screen, and in
+  this section, we'll follow that tradition.</p>
+
+  <p>The nice thing about starting with such a simple example is that you can quickly verify that your
+  compiler is installed, and that it's working properly. Printing information to the screen is also
+  just a pretty common thing to do, so practicing it early is good.</p>
+
+  <h3>Creating a Project File</h3>
+
+  <p>First, make a file to put your Rust code in. Rust files always end in a <em>.rs</em> extension.
+  If you're using more than one word in your filename, use an underscore to separate them; for example,
+  use <em>hello_world.rs</em> rather than <em>helloworld.rs</em>.</p>
+
+  <p>Now open the <em>hello_world.rs</em> file you just created, and type the following code:</p>
+
+  <pre><code class="language-rust">fn main() {
+    println!("Hello, world!");
+}</code></pre>
+
+  <p>Save the file, and go back to your terminal window. On Linux or OSX, enter the following commands:</p>
+
+  <pre><code>$ rustc hello_world.rs
+$ ./hello_world
+Hello, world!</code></pre>
+
+  <h2>Key Features</h2>
+
+  <ul>
+    <li><strong>Memory safety</strong> — Rust's ownership system guarantees memory safety at compile time</li>
+    <li><strong>Zero-cost abstractions</strong> — High-level constructs compile down to efficient machine code</li>
+    <li><strong>Fearless concurrency</strong> — The type system prevents data races at compile time</li>
+    <li><strong>No garbage collector</strong> — Predictable performance without GC pauses</li>
+    <li><strong>Interoperability</strong> — Easy FFI with C and other languages</li>
+  </ul>
+
+  <p>Rust has a number of features that are unique to it, and some that it shares with other languages.
+  Let's have a look at what makes Rust special, and how it achieves its goals of safety, speed, and
+  concurrency.</p>
+
+  <figure>
+    <img src="https://www.rust-lang.org/logos/rust-logo-blk.svg" alt="Rust programming language logo">
+    <figcaption>The Rust programming language logo</figcaption>
+  </figure>
+
+  <h2>Learning More</h2>
+
+  <p>The best way to learn Rust is to read <a href="https://doc.rust-lang.org/book/">The Rust Programming
+  Language</a>, also known as "the book". It covers everything from basic syntax to advanced features
+  like lifetimes and unsafe code.</p>
+
+  <p>You can also find help in the <a href="https://users.rust-lang.org/">Rust community forums</a>,
+  the <a href="https://discord.gg/rust-lang">Rust Discord server</a>, and on
+  <a href="https://stackoverflow.com/questions/tagged/rust">Stack Overflow</a>.</p>
+</article>
+</body>
+</html>
+<table>
+  <thead>
+    <tr>
+      <th>Heading 1</th>
+      <th>Heading 2</th>
+      <th>Heading 3</th>
+      <th>Heading 4</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Cell 1</td>
+      <td>Cell 2</td>
+      <td>Cell 3</td>
+      <td>Cell 4</td>
+    </tr>
+    <tr>
+      <td>Cell 5</td>
+      <td>Cell 6</td>
+      <td>Cell 7</td>
+      <td>Cell 8</td>
+    </tr>
+  </tbody>
+</table>
+
+<table>
+  <thead>
+    <tr>
+      <th>Heading 1</th>
+      <th>Heading 2</th>
+      <th>Heading 3</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Cell 1</td>
+      <td>Cell 2</td>
+      <td>Cell 3</td>
+      <td>Cell 4</td>
+    </tr>
+    <tr>
+      <td>Cell 5</td>
+      <td>Cell 6</td>
+    </tr>
+  </tbody>
+</table>
+
+<table>
+  <thead>
+    <tr>
+      <th align="left">Heading 1</th>
+      <th align="right">Heading 2</th>
+      <th align="center">Heading 3</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td align="left">Cell 1</td>
+      <td align="right">Cell 2</td>
+      <td align="center">Cell 3</td>
+    </tr>
+    <tr>
+      <td align="left">Cell 4</td>
+      <td align="right">Cell 5</td>
+      <td align="center">Cell 6</td>
+    </tr>
+  </tbody>
+</table>
+
+<table>
+  <tr>
+    <th align="left">Heading 1</th>
+    <th align="right">Heading 2</th>
+  </tr>
+  <tr>
+    <td align="left">Cell 1</td>
+    <td align="right">Cell 2</td>
+  </tr>
+  <tr>
+    <td align="left">Cell 3</td>
+    <td align="right">Cell 4</td>
+  </tr>
+</table>
+
+<table></table>
+
+<table><tr></tr></table>
+<ol start="2">
+  <li>Alpha</li>
+  <li><p>Bravo</p></li>
+  <li><pre><code class="language-js">charlie();</code></pre></li>
+</ol>
+
+<p>Foo.</p>
+
+<ol>
+  <li>Alpha</li>
+  <li>Bravo</li>
+  <li>Charlie</li>
+</ol>
+
+<p>Bar.</p>
+
+<ol start="3">
+  <li>
+    <p>Alpha</p>
+    <p>Bravo</p>
+  </li>
+  <li>
+    <p>Charlie</p>
+    <p>Delta</p>
+  </li>
+  <li>
+    <p>Echo</p>
+    <p>Foxtrot</p>
+  </li>
+</ol>
+
+<p>Baz.</p>
+
+<ol>
+  <li></li>
+  <li><div><p>Something else</p></div></li>
+</ol>
+
+<p>Qux.</p>
+
+<ol>
+  <li><div><p>Something else</p></div></li>
+  <li><script>foo();</script></li>
+</ol>
+
+<p>Quux.</p>
+
+<ol>
+  <li><div><p>Something else</p></div></li>
+  <li><p><input type="text"></p></li>
+</ol>
+
+<p>Quuux.</p>
+
+<ol>
+  <li><p><input type="checkbox" disabled checked> Bravo</p></li>
+  <li><p><input type="checkbox" disabled> Charlie</p></li>
+  <li class="task-list-item"><p><input type="checkbox" checked> Delta</p></li>
+  <li><p><input type="checkbox">Echo</p></li>
+  <li><p><input type="checkbox"><strong>Foxtrot</strong></p></li>
+  <li><p><input type="checkbox"> <strong>Golf</strong></p></li>
+  <li>
+    <p>
+      <input type="checkbox"> Hotel
+    </p>
+  </li>
+  <li><input type="checkbox"> India</li>
+  <li>
+    <input type="checkbox"> Juliet
+  </li>
+  <li><input type="checkbox"></li>
+</ol>
+<pre>alpha();</pre>
+<pre><code>bravo();</code></pre>
+<pre><code class="language-js">charlie();</code></pre>
+<pre><code class="delta language-js echo">foxtrot();</code></pre>
+<pre>golf <code>hotel();</code> india</pre>
+<pre>juliet <code>kilo();</code></pre>
+<pre><code>lima();</code> mike</pre>
+<pre><code></code></pre>
+<pre>november <div><code>oscar();</code></div> papa</pre>
+
+<p>Inline code: <code>let x = 42;</code> and <code>println!("hello")</code> in a sentence.</p>
+
+<pre><code class="language-rust">use std::collections::HashMap;
+
+fn main() {
+    let mut scores: HashMap&lt;&amp;str, i32&gt; = HashMap::new();
+    scores.insert("Alice", 100);
+    scores.insert("Bob", 85);
+    scores.insert("Charlie", 92);
+
+    for (name, score) in &amp;scores {
+        println!("{name}: {score}");
+    }
+
+    let total: i32 = scores.values().sum();
+    println!("Average: {}", total / scores.len() as i32);
+}</code></pre>
+
+<pre><code class="language-python">import json
+from pathlib import Path
+
+def load_config(path: str) -&gt; dict:
+    """Load configuration from a JSON file."""
+    config_path = Path(path)
+    if not config_path.exists():
+        raise FileNotFoundError(f"Config not found: {path}")
+
+    with open(config_path) as f:
+        return json.load(f)
+
+if __name__ == "__main__":
+    config = load_config("settings.json")
+    print(f"Loaded {len(config)} settings")
+</code></pre>
+
+<pre><code class="language-html">&lt;!DOCTYPE html&gt;
+&lt;html lang="en"&gt;
+&lt;head&gt;
+    &lt;meta charset="UTF-8"&gt;
+    &lt;title&gt;Example Page&lt;/title&gt;
+    &lt;style&gt;
+        body { font-family: sans-serif; margin: 2rem; }
+        .highlight { background: #ff0; padding: 0.2em; }
+    &lt;/style&gt;
+&lt;/head&gt;
+&lt;body&gt;
+    &lt;h1&gt;Hello, World!&lt;/h1&gt;
+    &lt;p class="highlight"&gt;This is highlighted text.&lt;/p&gt;
+&lt;/body&gt;
+&lt;/html&gt;</code></pre>
+
+<pre><code class="language-sql">SELECT u.name, COUNT(o.id) AS order_count, SUM(o.total) AS total_spent
+FROM users u
+LEFT JOIN orders o ON u.id = o.user_id
+WHERE u.created_at &gt;= '2024-01-01'
+GROUP BY u.id, u.name
+HAVING COUNT(o.id) &gt; 5
+ORDER BY total_spent DESC
+LIMIT 20;</code></pre>
+
+<p>Multiple inline examples: use <code>git commit -m "message"</code> to commit,
+<code>git push origin main</code> to push, and <code>git log --oneline -10</code>
+to see recent history. Backtick escaping: <code>echo `date`</code> should work.</p>
+
+<pre><code class="language-bash">#!/bin/bash
+set -euo pipefail
+
+# Process all .txt files in the current directory
+for file in *.txt; do
+    if [[ -f "$file" ]]; then
+        line_count=$(wc -l &lt; "$file")
+        echo "$file: $line_count lines"
+    fi
+done
+
+echo "Done processing $(ls *.txt 2>/dev/null | wc -l) files"
+</code></pre>
+
+<pre><code>// No language specified — plain fenced code block
+function mystery(x) {
+    return x * x + 2 * x + 1;
+}
+</code></pre>
+<!DOCTYPE html>
+<html>
+<body>
+<article>
+  <h1>Getting Started with Rust</h1>
+
+  <p>Rust is a systems programming language focused on three goals: safety, speed, and concurrency.
+  It accomplishes these goals without a garbage collector, making it useful for a number of use cases
+  other languages aren't good at: embedding in other languages, programs with specific space and time
+  requirements, and writing low-level code, like device drivers and operating systems.</p>
+
+  <p>Rust improves on current languages targeting this space by having a number of compile-time safety
+  checks with no runtime overhead, while eliminating all data races. Rust also aims to achieve
+  <em>zero-cost abstractions</em> even though some of these abstractions feel like those of a high-level
+  language. Even then, Rust still allows the fine-grained control that a low-level language would give.</p>
+
+  <h2>Installation</h2>
+
+  <p>The first step to using Rust is to install it. Generally speaking, you'll need an internet connection
+  to run the commands in this chapter, as we'll be downloading Rust from the internet.</p>
+
+  <p>We'll be showing off a number of commands using a terminal, and those lines all start with
+  <code>$</code>. You don't need to type in the <code>$</code> characters; they indicate the start of
+  each command. You'll see many tutorials and examples around the web that follow this convention:
+  <code>$</code> for commands run as a regular user, and <code>#</code> for commands you should be
+  running as an administrator.</p>
+
+  <h3>Installing on Linux or Mac</h3>
+
+  <p>If you're on Linux or a Mac, all you need to do is open a terminal and type this:</p>
+
+  <pre><code>$ curl https://sh.rustup.rs -sSf | sh</code></pre>
+
+  <p>This will download a script, and start the installation. You may be prompted for your password.
+  If it all goes well, you'll see this appear:</p>
+
+  <blockquote>
+    <p>Rust is installed now. Great!</p>
+  </blockquote>
+
+  <h3>Installing on Windows</h3>
+
+  <p>On Windows, go to <a href="https://rustup.rs/">rustup.rs</a> and follow the instructions to download
+  <strong>rustup-init.exe</strong>. Run that and follow the instructions it gives you.</p>
+
+  <p>The rest of the Windows-specific commands in the book will assume that you are using
+  <code>cmd</code> as your shell. If you use a different shell, you may be able to run the same commands
+  that Linux and Mac users do.</p>
+
+  <h2>Hello, World!</h2>
+
+  <p>Now that you have Rust installed, let's write your first Rust program. It's traditional when learning
+  a new language to write a little program that prints the text "Hello, world!" to the screen, and in
+  this section, we'll follow that tradition.</p>
+
+  <p>The nice thing about starting with such a simple example is that you can quickly verify that your
+  compiler is installed, and that it's working properly. Printing information to the screen is also
+  just a pretty common thing to do, so practicing it early is good.</p>
+
+  <h3>Creating a Project File</h3>
+
+  <p>First, make a file to put your Rust code in. Rust files always end in a <em>.rs</em> extension.
+  If you're using more than one word in your filename, use an underscore to separate them; for example,
+  use <em>hello_world.rs</em> rather than <em>helloworld.rs</em>.</p>
+
+  <p>Now open the <em>hello_world.rs</em> file you just created, and type the following code:</p>
+
+  <pre><code class="language-rust">fn main() {
+    println!("Hello, world!");
+}</code></pre>
+
+  <p>Save the file, and go back to your terminal window. On Linux or OSX, enter the following commands:</p>
+
+  <pre><code>$ rustc hello_world.rs
+$ ./hello_world
+Hello, world!</code></pre>
+
+  <h2>Key Features</h2>
+
+  <ul>
+    <li><strong>Memory safety</strong> — Rust's ownership system guarantees memory safety at compile time</li>
+    <li><strong>Zero-cost abstractions</strong> — High-level constructs compile down to efficient machine code</li>
+    <li><strong>Fearless concurrency</strong> — The type system prevents data races at compile time</li>
+    <li><strong>No garbage collector</strong> — Predictable performance without GC pauses</li>
+    <li><strong>Interoperability</strong> — Easy FFI with C and other languages</li>
+  </ul>
+
+  <p>Rust has a number of features that are unique to it, and some that it shares with other languages.
+  Let's have a look at what makes Rust special, and how it achieves its goals of safety, speed, and
+  concurrency.</p>
+
+  <figure>
+    <img src="https://www.rust-lang.org/logos/rust-logo-blk.svg" alt="Rust programming language logo">
+    <figcaption>The Rust programming language logo</figcaption>
+  </figure>
+
+  <h2>Learning More</h2>
+
+  <p>The best way to learn Rust is to read <a href="https://doc.rust-lang.org/book/">The Rust Programming
+  Language</a>, also known as "the book". It covers everything from basic syntax to advanced features
+  like lifetimes and unsafe code.</p>
+
+  <p>You can also find help in the <a href="https://users.rust-lang.org/">Rust community forums</a>,
+  the <a href="https://discord.gg/rust-lang">Rust Discord server</a>, and on
+  <a href="https://stackoverflow.com/questions/tagged/rust">Stack Overflow</a>.</p>
+</article>
+</body>
+</html>

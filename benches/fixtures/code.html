@@ -1,0 +1,93 @@
+<pre>alpha();</pre>
+<pre><code>bravo();</code></pre>
+<pre><code class="language-js">charlie();</code></pre>
+<pre><code class="delta language-js echo">foxtrot();</code></pre>
+<pre>golf <code>hotel();</code> india</pre>
+<pre>juliet <code>kilo();</code></pre>
+<pre><code>lima();</code> mike</pre>
+<pre><code></code></pre>
+<pre>november <div><code>oscar();</code></div> papa</pre>
+
+<p>Inline code: <code>let x = 42;</code> and <code>println!("hello")</code> in a sentence.</p>
+
+<pre><code class="language-rust">use std::collections::HashMap;
+
+fn main() {
+    let mut scores: HashMap&lt;&amp;str, i32&gt; = HashMap::new();
+    scores.insert("Alice", 100);
+    scores.insert("Bob", 85);
+    scores.insert("Charlie", 92);
+
+    for (name, score) in &amp;scores {
+        println!("{name}: {score}");
+    }
+
+    let total: i32 = scores.values().sum();
+    println!("Average: {}", total / scores.len() as i32);
+}</code></pre>
+
+<pre><code class="language-python">import json
+from pathlib import Path
+
+def load_config(path: str) -&gt; dict:
+    """Load configuration from a JSON file."""
+    config_path = Path(path)
+    if not config_path.exists():
+        raise FileNotFoundError(f"Config not found: {path}")
+
+    with open(config_path) as f:
+        return json.load(f)
+
+if __name__ == "__main__":
+    config = load_config("settings.json")
+    print(f"Loaded {len(config)} settings")
+</code></pre>
+
+<pre><code class="language-html">&lt;!DOCTYPE html&gt;
+&lt;html lang="en"&gt;
+&lt;head&gt;
+    &lt;meta charset="UTF-8"&gt;
+    &lt;title&gt;Example Page&lt;/title&gt;
+    &lt;style&gt;
+        body { font-family: sans-serif; margin: 2rem; }
+        .highlight { background: #ff0; padding: 0.2em; }
+    &lt;/style&gt;
+&lt;/head&gt;
+&lt;body&gt;
+    &lt;h1&gt;Hello, World!&lt;/h1&gt;
+    &lt;p class="highlight"&gt;This is highlighted text.&lt;/p&gt;
+&lt;/body&gt;
+&lt;/html&gt;</code></pre>
+
+<pre><code class="language-sql">SELECT u.name, COUNT(o.id) AS order_count, SUM(o.total) AS total_spent
+FROM users u
+LEFT JOIN orders o ON u.id = o.user_id
+WHERE u.created_at &gt;= '2024-01-01'
+GROUP BY u.id, u.name
+HAVING COUNT(o.id) &gt; 5
+ORDER BY total_spent DESC
+LIMIT 20;</code></pre>
+
+<p>Multiple inline examples: use <code>git commit -m "message"</code> to commit,
+<code>git push origin main</code> to push, and <code>git log --oneline -10</code>
+to see recent history. Backtick escaping: <code>echo `date`</code> should work.</p>
+
+<pre><code class="language-bash">#!/bin/bash
+set -euo pipefail
+
+# Process all .txt files in the current directory
+for file in *.txt; do
+    if [[ -f "$file" ]]; then
+        line_count=$(wc -l &lt; "$file")
+        echo "$file: $line_count lines"
+    fi
+done
+
+echo "Done processing $(ls *.txt 2>/dev/null | wc -l) files"
+</code></pre>
+
+<pre><code>// No language specified — plain fenced code block
+function mystery(x) {
+    return x * x + 2 * x + 1;
+}
+</code></pre>
