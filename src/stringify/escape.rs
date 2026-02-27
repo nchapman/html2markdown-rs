@@ -34,7 +34,9 @@ pub(crate) fn escape_phrasing(text: &str) -> String {
     static NEEDS_ESCAPE: LazyLock<Regex> = LazyLock::new(|| {
         // Characters that need escaping in phrasing content.
         // `\` must come first to avoid double-escaping.
-        Regex::new(r"[\\`*_\[!&<]").unwrap()
+        // `~~` (double tilde) triggers GFM strikethrough; escape the first `~`
+        // only when followed by another `~`.
+        Regex::new(r"[\\`*_\[!&<]|~~").unwrap()
     });
 
     // Fast path: no special characters.
@@ -53,6 +55,9 @@ pub(crate) fn escape_phrasing(text: &str) -> String {
             b'_' => true,
             b'*' => true,
             b'`' => true,
+            // `~` only triggers GFM strikethrough as `~~`, so only escape the
+            // first `~` of a pair (consistent with mdast-util-to-markdown unsafe.js).
+            b'~' => bytes.get(i + 1) == Some(&b'~'),
             b'<' => true,
             // `!` only needs escaping before `[` (potential image)
             b'!' => bytes.get(i + 1) == Some(&b'['),
@@ -80,7 +85,7 @@ pub(crate) fn escape_phrasing(text: &str) -> String {
 /// task-list checkbox syntax (`\[ ]`, `\[x]`) produced by the list handler.
 pub(crate) fn escape_link_text(text: &str) -> String {
     static NEEDS_ESCAPE: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(r"[\\`*_\[\]!&<]").unwrap()
+        Regex::new(r"[\\`*_\[\]!&<]|~~").unwrap()
     });
 
     if !NEEDS_ESCAPE.is_match(text) {
@@ -99,6 +104,7 @@ pub(crate) fn escape_link_text(text: &str) -> String {
             b'_' => true,
             b'*' => true,
             b'`' => true,
+            b'~' => bytes.get(i + 1) == Some(&b'~'),
             b'<' => true,
             b'!' => bytes.get(i + 1) == Some(&b'['),
             b'&' => matches!(bytes.get(i + 1), Some(b'#') | Some(b'A'..=b'Z') | Some(b'a'..=b'z')),
@@ -156,5 +162,30 @@ pub(crate) fn escape_at_break_start(content: String) -> String {
         format!("\\{}", content)
     } else {
         content
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn escape_link_text_escapes_bracket() {
+        assert_eq!(escape_link_text("a]b"), "a\\]b");
+        assert_eq!(escape_link_text("a[b"), "a\\[b");
+        assert_eq!(escape_link_text("plain"), "plain");
+    }
+
+    #[test]
+    fn escape_link_text_escapes_double_tilde() {
+        assert_eq!(escape_link_text("a~~b"), "a\\~~b");
+        assert_eq!(escape_link_text("a~b"), "a~b"); // single tilde: no escape
+    }
+
+    #[test]
+    fn escape_phrasing_escapes_double_tilde() {
+        assert_eq!(escape_phrasing("~~foo~~"), "\\~~foo\\~~");
+        assert_eq!(escape_phrasing("~foo~"), "~foo~"); // single tildes: no escape
+        assert_eq!(escape_phrasing("~/.bashrc"), "~/.bashrc"); // single tilde: no escape
     }
 }

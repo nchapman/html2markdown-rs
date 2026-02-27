@@ -480,7 +480,10 @@ fn handle_link_reference(state: &mut State, node: &mdast::LinkReference) -> Stri
     state.in_link_text = true;
     let content = super::phrasing::container_phrasing(state, &node.children);
     state.in_link_text = false;
-    let label = node.label.as_deref().unwrap_or(&node.identifier);
+    let raw_label = node.label.as_deref().unwrap_or(&node.identifier);
+    // Escape the reference label to prevent `]` from prematurely closing
+    // the `[content][label]` bracket. Port of mdast-util-to-markdown link-reference.js.
+    let label = super::escape::escape_link_text(raw_label);
     match node.reference_kind {
         mdast::ReferenceKind::Shortcut => format!("[{}]", content),
         mdast::ReferenceKind::Collapsed => format!("[{}][]", content),
@@ -489,11 +492,15 @@ fn handle_link_reference(state: &mut State, node: &mdast::LinkReference) -> Stri
 }
 
 fn handle_image_reference(node: &mdast::ImageReference) -> String {
-    let label = node.label.as_deref().unwrap_or(&node.identifier);
+    let raw_label = node.label.as_deref().unwrap_or(&node.identifier);
+    // Escape alt and label to prevent `]` from prematurely closing brackets.
+    // Port of mdast-util-to-markdown image-reference.js.
+    let alt = super::escape::escape_link_text(&node.alt);
+    let label = super::escape::escape_link_text(raw_label);
     match node.reference_kind {
-        mdast::ReferenceKind::Shortcut => format!("![{}]", node.alt),
-        mdast::ReferenceKind::Collapsed => format!("![{}][]", node.alt),
-        mdast::ReferenceKind::Full => format!("![{}][{}]", node.alt, label),
+        mdast::ReferenceKind::Shortcut => format!("![{}]", alt),
+        mdast::ReferenceKind::Collapsed => format!("![{}][]", alt),
+        mdast::ReferenceKind::Full => format!("![{}][{}]", alt, label),
     }
 }
 
