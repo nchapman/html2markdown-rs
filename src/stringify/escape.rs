@@ -14,20 +14,27 @@ use regex::Regex;
 /// - `\` → `\\` (backslash escape prefix)
 /// - `[` → `\[` (can start link or image reference)
 /// - `_` → `\_` (can start emphasis or strong)
-/// - `*` at break → `\*` (handled via atBreak, not here for now)
+/// - `*` → `\*` (can start emphasis or strong)
+/// - `` ` `` → `` \` `` (can start code span)
+/// - `<` → `\<` (can start autolink or inline HTML)
 /// - `!` before `[` → `\!` (can start image)
 ///
 /// Port of mdast-util-to-markdown's `safe()` function for phrasing context.
+/// Note: `]` is intentionally NOT escaped here — a standalone `]` without a
+/// preceding `[` is harmless, and escaping it breaks task-list checkbox syntax
+/// (`\[ ]`, `\[x]`) produced by the list-item serializer.
 pub(crate) fn escape_phrasing(text: &str) -> String {
     // These patterns are based on the `unsafe` array in mdast-util-to-markdown/lib/unsafe.js:
     // - {character: '[', inConstruct: 'phrasing'} — can start links/images
     // - {character: '_', inConstruct: 'phrasing'} — can start emphasis/strong
-    // - {character: '\\', after: '[\r\n]', inConstruct: 'phrasing'} — hard break
+    // - {character: '*', inConstruct: 'phrasing'} — can start emphasis/strong
+    // - {character: '`', inConstruct: 'phrasing'} — can start code span
+    // - {character: '<', inConstruct: 'phrasing'} — can start autolink/HTML
 
     static NEEDS_ESCAPE: LazyLock<Regex> = LazyLock::new(|| {
         // Characters that need escaping in phrasing content.
         // `\` must come first to avoid double-escaping.
-        Regex::new(r"[\\`_\[\]!&<]").unwrap()
+        Regex::new(r"[\\`*_\[!&<]").unwrap()
     });
 
     // Fast path: no special characters.
@@ -44,6 +51,9 @@ pub(crate) fn escape_phrasing(text: &str) -> String {
             b'\\' => true,
             b'[' => true,
             b'_' => true,
+            b'*' => true,
+            b'`' => true,
+            b'<' => true,
             // `!` only needs escaping before `[` (potential image)
             b'!' => bytes.get(i + 1) == Some(&b'['),
             // `&` before alphanumeric or `#` (character reference)

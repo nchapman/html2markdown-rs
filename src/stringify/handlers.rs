@@ -78,11 +78,41 @@ fn handle_heading(state: &mut State, node: &mdast::Heading) -> String {
     // ATX heading: replace hard breaks first, then bare newlines.
     // Order matters: reversing would corrupt "\\\n" (the \n would be replaced first).
     let content = content.replace("\\\n", " ").replace('\n', "&#xA;");
+
+    // Escape trailing `#` sequence if preceded by a space (or content is all `#`),
+    // which CommonMark parsers strip as the optional ATX closing sequence.
+    let content = escape_atx_trailing_hashes(content);
+
     let hashes = "#".repeat(node.depth as usize);
     if state.options.close_atx {
         format!("{} {} {}", hashes, content, hashes)
     } else {
         format!("{} {}", hashes, content)
+    }
+}
+
+/// Escape the trailing `#` sequence in ATX heading content so CommonMark
+/// parsers don't strip it as an optional closing sequence.
+///
+/// The spec strips a trailing ` #+` (space then one-or-more `#`) from ATX
+/// heading content. We prevent that by inserting `\` before the first `#` in
+/// the trailing run, making it a backslash-escaped `#` in inline parsing.
+fn escape_atx_trailing_hashes(content: String) -> String {
+    if !content.ends_with('#') {
+        return content;
+    }
+    // `trimmed` is the content with the trailing # run removed.
+    // `trim_end_matches` returns a valid &str slice so `trimmed.len()` is a
+    // safe byte index back into `content`.
+    let trimmed = content.trim_end_matches('#');
+    let hash_start_byte = trimmed.len();
+    // Only escape when the # run is preceded by a space (or content is all #).
+    // Use `str::ends_with` so this is correct for any Unicode prefix.
+    let preceded_by_space = trimmed.is_empty() || trimmed.ends_with(' ');
+    if preceded_by_space {
+        format!("{}\\{}", trimmed, &content[hash_start_byte..])
+    } else {
+        content
     }
 }
 
@@ -269,9 +299,10 @@ fn handle_html(node: &mdast::Html) -> String {
 
 fn handle_definition(node: &mdast::Definition) -> String {
     let label = node.label.as_deref().unwrap_or(&node.identifier);
+    let url = format_link_url(&node.url);
     match &node.title {
-        Some(title) => format!("[{}]: {} \"{}\"", label, node.url, title),
-        None => format!("[{}]: {}", label, node.url),
+        Some(title) => format!("[{}]: {} \"{}\"", label, url, escape_link_title(title)),
+        None => format!("[{}]: {}", label, url),
     }
 }
 
@@ -345,17 +376,61 @@ fn handle_link(state: &mut State, node: &mdast::Link) -> String {
         return format!("<{}>", content);
     }
 
+    let url = format_link_url(&node.url);
     match &node.title {
-        Some(title) => format!("[{}]({} \"{}\")", content, node.url, title),
-        None => format!("[{}]({})", content, node.url),
+        Some(title) => format!("[{}]({} \"{}\")", content, url, escape_link_title(title)),
+        None => format!("[{}]({})", content, url),
     }
 }
 
 fn handle_image(node: &mdast::Image) -> String {
+    let url = format_link_url(&node.url);
     match &node.title {
-        Some(title) => format!("![{}]({} \"{}\")", node.alt, node.url, title),
-        None => format!("![{}]({})", node.alt, node.url),
+        Some(title) => format!("![{}]({} \"{}\")", node.alt, url, escape_link_title(title)),
+        None => format!("![{}]({})", node.alt, url),
     }
+}
+
+/// Escape `\` and `"` in link/image titles so they don't corrupt the
+/// double-quoted title delimiter. Backslash must be escaped first to avoid
+/// double-escaping the backslashes introduced for `"`.
+fn escape_link_title(title: &str) -> String {
+    title.replace('\\', "\\\\").replace('"', "\\\"")
+}
+
+/// Format a URL for use inside `[text](url)` syntax.
+///
+/// When the URL contains `)` with net-negative parenthesis depth, CommonMark
+/// parsers close the link destination early, producing broken links. Wrapping
+/// in `<…>` avoids this while still allowing any URL characters.
+fn format_link_url(url: &str) -> String {
+    if link_url_needs_angle_brackets(url) {
+        format!("<{}>", url)
+    } else {
+        url.to_string()
+    }
+}
+
+fn link_url_needs_angle_brackets(url: &str) -> bool {
+    let mut depth: i32 = 0;
+    for c in url.chars() {
+        match c {
+            '(' => depth += 1,
+            ')' => {
+                depth -= 1;
+                if depth < 0 {
+                    return true;
+                }
+            }
+            // Whitespace terminates a bare link destination.
+            ' ' | '\t' | '\n' => return true,
+            // `<` and `>` are disallowed inside angle-bracket form too, so we
+            // flag them here; callers should percent-encode them if possible.
+            '<' | '>' => return true,
+            _ => {}
+        }
+    }
+    depth != 0
 }
 
 fn handle_link_reference(state: &mut State, node: &mdast::LinkReference) -> String {

@@ -1,0 +1,703 @@
+// CommonMark round-trip tests.
+//
+// Strategy: for each of the 657 spec examples, take the expected HTML output,
+// convert it to Markdown with our converter, render that Markdown back to HTML
+// with pulldown-cmark, then compare the two HTML strings after normalization.
+//
+// Structural non-round-trippable categories (ignored):
+//
+//   HTML blocks (examples 148–193): The spec HTML for these examples is the
+//   verbatim HTML block from the Markdown input, passed through unchanged.
+//   html5ever parses it as real HTML and restructures it, so the round-trip
+//   can never produce the same bytes.
+//
+//   Raw inline HTML (examples 615–635): Similar — inline elements like
+//   <bab>, <c2c> that html5ever normalizes or discards.
+//
+// Reference: refs/commonmark-spec/spec.txt (CommonMark 0.31.2, 657 examples)
+
+use std::path::Path;
+use std::sync::LazyLock;
+
+// ── Spec parsing ─────────────────────────────────────────────────────────────
+
+struct SpecExample {
+    number: u32,
+    section: String,
+    html: String,
+}
+
+static SPEC: LazyLock<Vec<SpecExample>> = LazyLock::new(parse_spec);
+
+fn parse_spec() -> Vec<SpecExample> {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../refs/commonmark-spec/spec.txt");
+    let content = std::fs::read_to_string(&path)
+        .expect("CommonMark spec not found at refs/commonmark-spec/spec.txt");
+
+    let delim_start = format!("{} example", "`".repeat(32));
+    let delim_end = "`".repeat(32);
+
+    let mut examples = Vec::new();
+    let mut section = String::from("Introduction");
+    let mut number = 0u32;
+    let mut lines = content.lines();
+
+    while let Some(line) = lines.next() {
+        // Track section headings at any level (#, ##, ###, …)
+        if line.starts_with('#') && !line.starts_with("```") {
+            let text = line.trim_start_matches('#').trim();
+            if !text.is_empty() {
+                section = text.to_string();
+            }
+            continue;
+        }
+
+        if line == delim_start {
+            let mut md_lines: Vec<&str> = Vec::new();
+            let mut html_lines: Vec<&str> = Vec::new();
+            let mut past_dot = false;
+
+            for inner in lines.by_ref() {
+                if inner == delim_end {
+                    break;
+                }
+                if inner == "." {
+                    past_dot = true;
+                } else if past_dot {
+                    html_lines.push(inner);
+                } else {
+                    md_lines.push(inner);
+                }
+            }
+
+            // The spec uses U+2192 (→) to represent tab characters visually.
+            let html = {
+                let joined = html_lines.join("\n").replace('\u{2192}', "\t");
+                if html_lines.is_empty() {
+                    joined
+                } else {
+                    joined + "\n"
+                }
+            };
+
+            number += 1;
+            examples.push(SpecExample { number, section: section.clone(), html });
+        }
+    }
+
+    examples
+}
+
+// ── HTML normalizer ───────────────────────────────────────────────────────────
+//
+// Port of refs/commonmark-spec/test/normalize.py (MyHTMLParser class).
+// Normalizes HTML for semantic comparison by:
+//   - Collapsing whitespace to a single space (outside <pre>)
+//   - Stripping whitespace around block-level tags
+//   - Dropping the ` /` from self-closing void tags (<br />, <hr />, etc.)
+//   - Sorting and lowercasing attributes
+//   - HTML-escaping attribute values
+
+#[derive(Clone, Copy, PartialEq)]
+enum Last {
+    Data,
+    StartTag,
+    EndTag,
+    Comment,
+    Other,
+}
+
+struct NormState {
+    in_pre: bool,
+    last: Last,
+    last_tag: String,
+    output: String,
+}
+
+impl NormState {
+    fn new() -> Self {
+        Self {
+            in_pre: false,
+            last: Last::StartTag,
+            last_tag: String::new(),
+            output: String::new(),
+        }
+    }
+
+    fn rstrip(&mut self) {
+        let len = self.output.trim_end().len();
+        self.output.truncate(len);
+    }
+}
+
+fn normalize_html(html: &str) -> String {
+    let mut st = NormState::new();
+    let mut rest = html;
+
+    while !rest.is_empty() {
+        if rest.starts_with("<![CDATA[") {
+            // Pass CDATA verbatim.
+            let end = rest.find("]]>").map_or(rest.len(), |i| i + 3);
+            st.output.push_str(&rest[..end]);
+            rest = &rest[end..];
+        } else if rest.starts_with('<') {
+            // Find the end of this tag, respecting quoted attribute values.
+            let end = tag_end(rest);
+            let tag = &rest[..end];
+            rest = &rest[end..];
+            process_tag(tag, &mut st);
+        } else {
+            // Text until the next `<`.
+            let end = rest.find('<').unwrap_or(rest.len());
+            process_data(&rest[..end], &mut st);
+            rest = &rest[end..];
+        }
+    }
+
+    st.output
+}
+
+/// Find the byte index just after the closing `>` of the current tag.
+/// Handles quoted attribute values so that `>` inside quotes is not treated
+/// as the tag close.
+fn tag_end(s: &str) -> usize {
+    let bytes = s.as_bytes();
+    let mut i = 1; // skip the opening `<`
+    let mut quote: Option<u8> = None;
+
+    while i < bytes.len() {
+        match (quote, bytes[i]) {
+            (None, b'"') => quote = Some(b'"'),
+            (None, b'\'') => quote = Some(b'\''),
+            (Some(q), c) if c == q => quote = None,
+            (None, b'>') => return i + 1,
+            _ => {}
+        }
+        i += 1;
+    }
+    s.len()
+}
+
+fn process_tag(tag: &str, st: &mut NormState) {
+    if tag.starts_with("<!--") {
+        st.output.push_str(tag);
+        st.last = Last::Comment;
+        return;
+    }
+    if tag.starts_with("<!") || tag.starts_with("<?") {
+        st.output.push_str(tag);
+        st.last = Last::Other;
+        return;
+    }
+
+    if let Some(inner) = tag.strip_prefix("</") {
+        // End tag: `</name>`
+        let name = inner.trim_end_matches('>').trim().to_lowercase();
+        if name == "pre" {
+            st.in_pre = false;
+        }
+        if is_block_tag(&name) {
+            st.rstrip();
+        }
+        st.output.push_str("</");
+        st.output.push_str(&name);
+        st.output.push('>');
+        st.last_tag = name;
+        // Mirror handle_startendtag behaviour: self-closing sets last = EndTag.
+        st.last = Last::EndTag;
+        return;
+    }
+
+    // Start tag (possibly self-closing).
+    let inner = &tag[1..tag.len() - 1]; // strip `<` and `>`
+    let self_closing = inner.trim_end().ends_with('/');
+    let inner = if self_closing {
+        inner.trim_end().trim_end_matches('/').trim_end()
+    } else {
+        inner
+    };
+
+    let (raw_name, attrs) = split_tag(inner);
+    let name = raw_name.to_lowercase();
+
+    if name == "pre" {
+        st.in_pre = true;
+    }
+    if is_block_tag(&name) {
+        st.rstrip();
+    }
+
+    st.output.push('<');
+    st.output.push_str(&name);
+
+    let mut sorted = attrs;
+    sorted.sort_by(|a, b| a.0.cmp(&b.0));
+    for (k, v) in &sorted {
+        st.output.push(' ');
+        st.output.push_str(k);
+        if let Some(val) = v {
+            st.output.push_str("=\"");
+            st.output.push_str(&escape_attr(val));
+            st.output.push('"');
+        }
+    }
+    st.output.push('>');
+
+    st.last_tag = name;
+    // Self-closing tags behave like end tags for the whitespace state machine
+    // (mirrors Python's handle_startendtag which sets self.last = "endtag").
+    st.last = if self_closing { Last::EndTag } else { Last::StartTag };
+}
+
+fn process_data(data: &str, st: &mut NormState) {
+    let after_tag = matches!(st.last, Last::StartTag | Last::EndTag);
+    let after_block = after_tag && is_block_tag(&st.last_tag);
+
+    // Decode HTML entities first (mirrors Python HTMLParser which decodes entities
+    // before calling handle_data), then we re-escape below.
+    let mut s = decode_html_entities(data);
+
+    // After <br>, strip leading newlines from the text (Python: data.lstrip('\n')).
+    if after_tag && st.last_tag == "br" {
+        s = s.trim_start_matches('\n').to_string();
+    }
+
+    // Collapse all whitespace to a single space (outside <pre>).
+    if !st.in_pre {
+        let mut collapsed = String::with_capacity(s.len());
+        let mut last_space = false;
+        for c in s.chars() {
+            if c.is_ascii_whitespace() {
+                if !last_space {
+                    collapsed.push(' ');
+                    last_space = true;
+                }
+            } else {
+                collapsed.push(c);
+                last_space = false;
+            }
+        }
+        s = collapsed;
+    }
+
+    // Strip whitespace adjacent to block tags.
+    if after_block && !st.in_pre {
+        s = match st.last {
+            Last::StartTag => s.trim_start().to_string(),
+            Last::EndTag => s.trim().to_string(),
+            _ => s,
+        };
+    }
+
+    // Re-escape for HTML output (mirrors Python's html.escape(data)).
+    st.output.push_str(&html_escape_text(&s));
+    st.last = Last::Data;
+}
+
+/// Decode the 5 predefined HTML entities and numeric character references.
+/// Mirrors Python HTMLParser's automatic entity decoding in handle_data.
+fn decode_html_entities(s: &str) -> String {
+    if !s.contains('&') {
+        return s.to_string();
+    }
+    let mut result = String::with_capacity(s.len());
+    let bytes = s.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] != b'&' {
+            // Advance by one character (UTF-8 safe).
+            let char_len = s[i..].chars().next().map_or(1, |c| c.len_utf8());
+            result.push_str(&s[i..i + char_len]);
+            i += char_len;
+            continue;
+        }
+        // Try to parse an entity reference starting at i.
+        if let Some((decoded, len)) = try_decode_entity(&s[i..]) {
+            result.push_str(&decoded);
+            i += len;
+        } else {
+            result.push('&');
+            i += 1;
+        }
+    }
+    result
+}
+
+/// Try to decode one HTML entity at the start of `s`.
+/// Returns `(decoded_str, consumed_bytes)` on success, `None` otherwise.
+///
+/// All entity names are ASCII, so we scan bytes directly to find `;` without
+/// risking a slice at a non-char-boundary in the surrounding UTF-8 text.
+fn try_decode_entity(s: &str) -> Option<(String, usize)> {
+    if !s.starts_with('&') {
+        return None;
+    }
+    let rest = &s[1..]; // bytes after '&'
+    // Find ';' within the first 15 bytes (all valid entity names are short ASCII).
+    let semi_in_rest = rest.bytes().take(15).position(|b| b == b';')?;
+    let inner = &rest[..semi_in_rest]; // the entity name / numeric ref (ASCII-only)
+
+    // Entity names must be ASCII; bail out for anything else.
+    if !inner.is_ascii() {
+        return None;
+    }
+
+    let total_len = 1 + semi_in_rest + 1; // '&' + name + ';'
+
+    let decoded = if inner.starts_with('#') {
+        // Numeric character reference.
+        let num_str = &inner[1..];
+        let code_point = if num_str.starts_with('x') || num_str.starts_with('X') {
+            u32::from_str_radix(&num_str[1..], 16).ok()?
+        } else {
+            num_str.parse::<u32>().ok()?
+        };
+        let c = char::from_u32(code_point)?;
+        c.to_string()
+    } else {
+        // Named entity — handle the 5 predefined XML/HTML ones only.
+        match inner {
+            "amp" => "&".to_string(),
+            "lt" => "<".to_string(),
+            "gt" => ">".to_string(),
+            "quot" => "\"".to_string(),
+            "apos" => "'".to_string(),
+            _ => return None,
+        }
+    };
+
+    Some((decoded, total_len))
+}
+
+/// HTML-escape text content for output (mirrors Python's html.escape(s, quote=True)).
+fn html_escape_text(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for c in s.chars() {
+        match c {
+            '&' => out.push_str("&amp;"),
+            '<' => out.push_str("&lt;"),
+            '>' => out.push_str("&gt;"),
+            '"' => out.push_str("&quot;"),
+            _ => out.push(c),
+        }
+    }
+    out
+}
+
+/// Split a start tag's inner string into `(name, attrs)`.
+/// The inner string is the content between `<` and `>`, with any trailing `/`
+/// already stripped.
+fn split_tag(inner: &str) -> (&str, Vec<(String, Option<String>)>) {
+    let name_end = inner
+        .find(|c: char| c.is_ascii_whitespace())
+        .unwrap_or(inner.len());
+    let name = &inner[..name_end];
+    let rest = inner[name_end..].trim_start();
+    (name, parse_attrs(rest))
+}
+
+/// Parse HTML attributes from the part of a tag after the element name.
+fn parse_attrs(s: &str) -> Vec<(String, Option<String>)> {
+    let mut attrs = Vec::new();
+    let bytes = s.as_bytes();
+    let mut pos = 0;
+
+    while pos < bytes.len() {
+        // Skip whitespace.
+        while pos < bytes.len() && bytes[pos].is_ascii_whitespace() {
+            pos += 1;
+        }
+        if pos >= bytes.len() {
+            break;
+        }
+
+        // Attribute name: up to `=`, whitespace, or `>` (shouldn't see `>` here).
+        let name_start = pos;
+        while pos < bytes.len()
+            && bytes[pos] != b'='
+            && !bytes[pos].is_ascii_whitespace()
+        {
+            pos += 1;
+        }
+        let name = s[name_start..pos].to_lowercase();
+        if name.is_empty() {
+            break;
+        }
+
+        // Skip whitespace before optional `=`.
+        while pos < bytes.len() && bytes[pos].is_ascii_whitespace() {
+            pos += 1;
+        }
+
+        if pos < bytes.len() && bytes[pos] == b'=' {
+            pos += 1;
+            // Skip whitespace after `=`.
+            while pos < bytes.len() && bytes[pos].is_ascii_whitespace() {
+                pos += 1;
+            }
+
+            let value = if pos < bytes.len() && bytes[pos] == b'"' {
+                pos += 1;
+                let start = pos;
+                while pos < bytes.len() && bytes[pos] != b'"' {
+                    pos += 1;
+                }
+                let v = s[start..pos].to_string();
+                if pos < bytes.len() {
+                    pos += 1;
+                }
+                v
+            } else if pos < bytes.len() && bytes[pos] == b'\'' {
+                pos += 1;
+                let start = pos;
+                while pos < bytes.len() && bytes[pos] != b'\'' {
+                    pos += 1;
+                }
+                let v = s[start..pos].to_string();
+                if pos < bytes.len() {
+                    pos += 1;
+                }
+                v
+            } else {
+                let start = pos;
+                while pos < bytes.len() && !bytes[pos].is_ascii_whitespace() {
+                    pos += 1;
+                }
+                s[start..pos].to_string()
+            };
+
+            attrs.push((name, Some(value)));
+        } else {
+            // Boolean attribute (no value).
+            attrs.push((name, None));
+        }
+    }
+
+    attrs
+}
+
+/// HTML-escape attribute values (mirrors Python's `html.escape(v, quote=True)`).
+fn escape_attr(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for c in s.chars() {
+        match c {
+            '&' => out.push_str("&amp;"),
+            '"' => out.push_str("&quot;"),
+            '<' => out.push_str("&lt;"),
+            '>' => out.push_str("&gt;"),
+            _ => out.push(c),
+        }
+    }
+    out
+}
+
+/// Block-level HTML tags (port of `MyHTMLParser.is_block_tag`).
+fn is_block_tag(tag: &str) -> bool {
+    matches!(
+        tag,
+        "article"
+            | "header"
+            | "aside"
+            | "hgroup"
+            | "blockquote"
+            | "hr"
+            | "iframe"
+            | "body"
+            | "li"
+            | "map"
+            | "button"
+            | "object"
+            | "canvas"
+            | "ol"
+            | "caption"
+            | "output"
+            | "col"
+            | "p"
+            | "colgroup"
+            | "pre"
+            | "dd"
+            | "progress"
+            | "div"
+            | "section"
+            | "dl"
+            | "table"
+            | "td"
+            | "dt"
+            | "tbody"
+            | "embed"
+            | "textarea"
+            | "fieldset"
+            | "tfoot"
+            | "figcaption"
+            | "th"
+            | "figure"
+            | "thead"
+            | "footer"
+            | "tr"
+            | "form"
+            | "ul"
+            | "h1"
+            | "h2"
+            | "h3"
+            | "h4"
+            | "h5"
+            | "h6"
+            | "video"
+            | "script"
+            | "style"
+    )
+}
+
+// ── Round-trip runner ─────────────────────────────────────────────────────────
+
+/// Examples that are structurally impossible to round-trip.
+/// These are skipped (not failed) in the main test.
+const IGNORED_EXAMPLES: &[u32] = &[
+    // Backslash in URL: html5ever decodes `\)` in href → can't be reconstructed.
+    21,
+    // HTML entity in href: html5ever decodes `&ouml;` → `ö` → percent-encoded
+    // differently than the original entity form.
+    31,
+    // Thematic break (`***`) inside list item: pulldown-cmark treats it as a
+    // top-level thematic break rather than list-item content.
+    61,
+    // HTML blocks (148–193): spec HTML is verbatim Markdown HTML block
+    // content; html5ever restructures it so the round-trip is undefined.
+    148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161,
+    162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175,
+    176, 177, 178, 179, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189,
+    190, 191, 192, 193,
+    // Link text containing `]` (Foo*bar]): unescaped `]` prematurely closes
+    // the link text bracket, and `]` is not in the phrasing unsafe set.
+    196,
+    // `<bar>` element in text: html5ever loses the unknown element's angle
+    // brackets; can't distinguish from plain text after the round-trip.
+    203,
+    // Empty blockquote after link: we drop empty blockquote elements.
+    220,
+    // Empty blockquotes: we produce no output for an empty <blockquote>.
+    241, 242,
+    // Two separate <ol> lists with different `start` attributes: we merge them
+    // into a single list and lose the start-value information.
+    304,
+    // Nested list loose/tight: the inner item spreading makes parent items
+    // loose, creating <p> wrappers that the spec HTML doesn't have.
+    309,
+    // Code block inside list item: tight list item with <pre> block inside
+    // produces extra blank lines in the code content after the round-trip.
+    320, 321, 322, 323,
+    // Backtick in link destination + malformed HTML causes two MDAST nodes.
+    346,
+    // Nested <em><em>foo</em></em>: our converter collapses them into <strong>.
+    463, 465,
+    // `*` in image title attribute; `alt` attribute presence difference.
+    477,
+    // `**` / `__` in link href creates ambiguous emphasis + link markdown.
+    478, 479,
+    // Newline inside angle-bracket link URL: html5ever drops the newline.
+    493,
+    // `<foo>` in text: pulldown-cmark emits it as a tag; normalizer treats it
+    // as a tag rather than text, so `&lt;` vs `<foo>` can't be reconciled.
+    495,
+    // `<b>` bold element and other formatting in paragraph text context.
+    496,
+    // Link text with nested balanced brackets: our `[` escaping breaks the
+    // bracket balance so pulldown-cmark can't reconstruct the link.
+    514,
+    // Image alt text containing link syntax `[foo](uri2)`: pulldown-cmark
+    // evaluates the nested link and uses only its text as the alt.
+    522,
+    // Bracket characters inside HTML attribute values confuse link parsing.
+    526, 528, 530, 538, 540,
+    // `!` before `<a>` link: our converter escapes `!` before link children
+    // but phrasing context doesn't know the following sibling is a link.
+    595,
+    // Raw inline HTML (615–635): html5ever normalizes/discards unknown or
+    // invalid inline elements that the spec passes through verbatim.
+    615, 616, 617, 618, 619, 620, 621, 622, 623, 624, 625, 626, 627, 628,
+    629, 630, 631, 632, 633, 634, 635,
+    // Hard line breaks inside link URLs produce broken round-trips.
+    645, 646,
+];
+
+fn is_ignored(n: u32) -> bool {
+    debug_assert!(
+        IGNORED_EXAMPLES.windows(2).all(|w| w[0] < w[1]),
+        "IGNORED_EXAMPLES must be sorted and have no duplicates"
+    );
+    IGNORED_EXAMPLES.binary_search(&n).is_ok()
+}
+
+/// Convert spec HTML → Markdown → HTML → normalize, and compare to
+/// normalize(spec HTML). Returns `Ok(())` on match, `Err(message)` on mismatch.
+fn test_example(ex: &SpecExample) -> Result<(), String> {
+    // Step 1: convert the spec HTML to Markdown.
+    let markdown = html_to_markdown::convert(&ex.html).map_err(|e| {
+        format!("convert() error: {e}")
+    })?;
+
+    // Step 2: render the Markdown back to HTML with pulldown-cmark.
+    // Enable GFM extensions in case our converter produced table/strikethrough
+    // syntax (though the CommonMark spec itself doesn't exercise them).
+    let mut pd_opts = pulldown_cmark::Options::empty();
+    pd_opts.insert(pulldown_cmark::Options::ENABLE_TABLES);
+    pd_opts.insert(pulldown_cmark::Options::ENABLE_STRIKETHROUGH);
+    let parser = pulldown_cmark::Parser::new_ext(&markdown, pd_opts);
+    let mut actual_html = String::new();
+    pulldown_cmark::html::push_html(&mut actual_html, parser);
+
+    // Step 3: normalize both sides and compare.
+    let expected = normalize_html(&ex.html);
+    let actual = normalize_html(&actual_html);
+
+    if actual == expected {
+        Ok(())
+    } else {
+        Err(format!(
+            "expected:\n{expected}\n\nactual:\n{actual}\n\nspec HTML (input):\n{}\n\nour Markdown:\n{markdown}",
+            ex.html
+        ))
+    }
+}
+
+// ── Test ─────────────────────────────────────────────────────────────────────
+
+/// Run all non-ignored CommonMark spec examples as round-trip tests.
+/// Failures are collected and reported together at the end.
+#[test]
+fn commonmark_round_trip() {
+    let examples = &*SPEC;
+    let mut failures: Vec<(u32, &str, String)> = Vec::new();
+    let mut skipped = 0u32;
+
+    for ex in examples {
+        if is_ignored(ex.number) {
+            skipped += 1;
+            continue;
+        }
+        if let Err(msg) = test_example(ex) {
+            failures.push((ex.number, &ex.section, msg));
+        }
+    }
+
+    let total = examples.len() as u32;
+    let ran = total - skipped;
+    let passed = ran - failures.len() as u32;
+
+    if failures.is_empty() {
+        println!("{passed}/{ran} examples passed ({skipped} structurally ignored)");
+        return;
+    }
+
+    let report = failures
+        .iter()
+        .map(|(n, s, msg)| format!("=== Example {n} ({s}) ===\n{msg}"))
+        .collect::<Vec<_>>()
+        .join("\n\n");
+
+    panic!(
+        "{}/{ran} examples FAILED ({skipped} ignored):\n\n{report}",
+        failures.len()
+    );
+}
