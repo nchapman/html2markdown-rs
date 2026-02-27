@@ -564,9 +564,10 @@ const IGNORED_EXAMPLES: &[u32] = &[
     61,
     // HTML blocks (148–193): spec HTML is verbatim Markdown HTML block
     // content; html5ever restructures it so the round-trip is undefined.
+    // #169 and #181 happen to round-trip correctly and are unignored.
     148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161,
-    162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175,
-    176, 177, 178, 179, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189,
+    162, 163, 164, 165, 166, 167, 168, 170, 171, 172, 173, 174, 175,
+    176, 177, 178, 179, 180, 182, 183, 184, 185, 186, 187, 188, 189,
     190, 191, 192, 193,
     // `<bar>` element in text: html5ever loses the unknown element's angle
     // brackets; can't distinguish from plain text after the round-trip.
@@ -590,10 +591,22 @@ const IGNORED_EXAMPLES: &[u32] = &[
     // Unknown <bar> element in attribute value: html5ever discards unknown
     // inline elements so their angle brackets are lost; can't reconstruct.
     526, 538,
-    // Raw inline HTML (615–635): html5ever normalizes/discards unknown or
-    // invalid inline elements that the spec passes through verbatim.
-    615, 616, 617, 618, 619, 620, 621, 622, 623, 624, 625, 626, 627, 628,
-    629, 630, 631, 632, 633, 634, 635,
+    // Raw inline HTML (#615–619): html5ever discards unknown inline elements
+    // (e.g. <bab>, <responsive-image>) so angle brackets are lost; unfixable.
+    615, 616, 617, 618, 619,
+    // (#620–624, #626–627, #634–635): "invalid" raw HTML that CommonMark
+    // escapes to &lt;...&gt; — html5ever sees plain text and these round-trip.
+    // Stray end tags (#625): html5ever discards them; we emit empty string.
+    625,
+    // Invalid/malformed HTML comments (#628): html5ever reinterprets comment
+    // boundaries differently; also processing instructions (#629) and
+    // declarations (#630) are converted to comments by html5ever.
+    628, 629, 630,
+    // CDATA section (#631): html5ever partially parses it as a comment.
+    631,
+    // Backslash in href (#633) and entity in href (#632): html5ever decodes
+    // them so we lose the original representation.
+    632, 633,
     // Literal newline inside href attribute: CommonMark angle-bracket link
     // destinations explicitly forbid line endings, so these URLs have no valid
     // Markdown representation. Percent-encoding would change the href value.
