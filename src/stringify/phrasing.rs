@@ -32,5 +32,20 @@ pub(crate) fn container_phrasing(state: &mut State, children: &[Node]) -> String
         }
     }
 
+    // Port of mdast-util-to-markdown unsafe entry:
+    //   {character: '!', after: /\[/, inConstruct: 'phrasing'}
+    // When a part ends with an unescaped `!` and the following part starts
+    // with `[` (i.e., a link/image), escape the `!` as `\!` to prevent
+    // `![text](url)` from being interpreted as image syntax.
+    for i in 0..parts.len().saturating_sub(1) {
+        if parts[i + 1].starts_with('[') && parts[i].ends_with('!')
+            && !parts[i].ends_with("\\!")
+        {
+            let len = parts[i].len();
+            parts[i].truncate(len - 1);
+            parts[i].push_str("\\!");
+        }
+    }
+
     parts.join("")
 }

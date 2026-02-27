@@ -129,6 +129,9 @@ fn handle_thematic_break(state: &mut State) -> String {
 
 fn handle_blockquote(state: &mut State, node: &mdast::Blockquote) -> String {
     let content = super::flow::container_flow(state, &node.children);
+    if content.is_empty() {
+        return ">".to_string();
+    }
     content
         .lines()
         .map(|line| {
@@ -146,20 +149,28 @@ fn handle_list(state: &mut State, node: &mdast::List) -> String {
     let mut result = Vec::new();
     let old_bullet = state.bullet_current;
 
-    if !node.ordered {
-        // Alternate bullets only when bullet_last_used == our preferred bullet.
-        // bullet_last_used is set AFTER children are processed (matches JS behavior),
-        // so it reflects the PREVIOUSLY completed sibling list's bullet.
-        // Between non-list flow children, bullet_last_used is reset to None.
+    // For unordered lists: alternate bullets when sibling list used the same bullet.
+    // For ordered lists: alternate `.` / `)` delimiters when the previous sibling
+    // was also an ordered list, to prevent CommonMark parsers from merging them.
+    // (Two adjacent ordered lists with the same delimiter are indistinguishable
+    // from a single list; switching to `)` forces a new list.)
+    let ordered_delimiter = if node.ordered {
+        let pref = state.options.bullet_ordered;
+        if state.ordered_bullet_last_used.is_some() {
+            if pref == '.' { ')' } else { '.' }
+        } else {
+            pref
+        }
+    } else {
+        // Alternate unordered bullets.
         let bullet = if state.bullet_last_used == Some(state.options.bullet) {
-            // Use an alternate bullet to avoid ambiguity.
             if state.options.bullet == '*' { '-' } else { '*' }
         } else {
             state.options.bullet
         };
         state.bullet_current = Some(bullet);
-        // bullet_last_used will be set AFTER processing children (below).
-    }
+        '.' // unused for unordered
+    };
 
     for (i, child) in node.children.iter().enumerate() {
         let prefix = if node.ordered {
@@ -168,7 +179,7 @@ fn handle_list(state: &mut State, node: &mdast::List) -> String {
             } else {
                 node.start.unwrap_or(1)
             };
-            format!("{}{}", number, state.options.bullet_ordered)
+            format!("{}{}", number, ordered_delimiter)
         } else {
             format!("{}", state.bullet_current.unwrap_or('*'))
         };
@@ -210,8 +221,10 @@ fn handle_list(state: &mut State, node: &mdast::List) -> String {
         result.push(item);
     }
 
-    // Set bullet_last_used AFTER processing children (same as JS: `state.bulletLastUsed = bullet`).
-    if !node.ordered {
+    // Set bullet trackers AFTER processing children.
+    if node.ordered {
+        state.ordered_bullet_last_used = Some(ordered_delimiter);
+    } else {
         state.bullet_last_used = state.bullet_current;
     }
     state.bullet_current = old_bullet;
@@ -313,7 +326,14 @@ fn handle_definition(node: &mdast::Definition) -> String {
 fn handle_text(state: &mut State, node: &mdast::Text) -> String {
     // Escape Markdown syntax characters in phrasing content.
     // Port of mdast-util-to-markdown's `safe()` function.
-    let escaped = super::escape::escape_phrasing(&node.value);
+    // When inside link text (`[…]`), also escape `]` to prevent premature
+    // bracket close. (We don't escape `]` globally because it would corrupt
+    // task-list checkbox syntax like `\[ ]` emitted by the list-item handler.)
+    let escaped = if state.in_link_text {
+        super::escape::escape_link_text(&node.value)
+    } else {
+        super::escape::escape_phrasing(&node.value)
+    };
     // Apply at-break escaping if this text is at the start of a block.
     if state.at_break {
         state.at_break = false;
@@ -326,7 +346,22 @@ fn handle_text(state: &mut State, node: &mdast::Text) -> String {
 fn handle_emphasis(state: &mut State, node: &mdast::Emphasis) -> String {
     let marker = state.options.emphasis;
     let content = super::phrasing::container_phrasing(state, &node.children);
-    format!("{}{}{}", marker, content, marker)
+    // When the inner content begins or ends with exactly ONE instance of the
+    // marker (another emphasis span like `*foo*`), wrapping it with the same
+    // marker would produce `**…**` which CommonMark parses as strong.
+    // Switch to the alternate delimiter to get `*_foo_*` / `_*foo*_`.
+    // We do NOT switch for double-marker content like `**bar**` (strong),
+    // because `***bar***` is correctly parsed as `<em><strong>…</strong></em>`.
+    let starts_single = content.starts_with(marker)
+        && content.chars().nth(1) != Some(marker);
+    let ends_single = content.ends_with(marker)
+        && content.chars().rev().nth(1) != Some(marker);
+    let actual_marker = if starts_single || ends_single {
+        if marker == '*' { '_' } else { '*' }
+    } else {
+        marker
+    };
+    format!("{}{}{}", actual_marker, content, actual_marker)
 }
 
 fn handle_strong(state: &mut State, node: &mdast::Strong) -> String {
@@ -359,7 +394,9 @@ fn handle_link(state: &mut State, node: &mdast::Link) -> String {
     // Trim only leading whitespace — trailing is handled by MDAST normalization
     // (normalize_inline_boundaries in whitespace.rs) which moves the space
     // inside the link when it is the sole separator before the next token.
+    state.in_link_text = true;
     let content = super::phrasing::container_phrasing(state, &node.children);
+    state.in_link_text = false;
     let content = content.trim_start();
 
     // Try to format as autolink: <url> or <email>
@@ -434,7 +471,9 @@ fn link_url_needs_angle_brackets(url: &str) -> bool {
 }
 
 fn handle_link_reference(state: &mut State, node: &mdast::LinkReference) -> String {
+    state.in_link_text = true;
     let content = super::phrasing::container_phrasing(state, &node.children);
+    state.in_link_text = false;
     let label = node.label.as_deref().unwrap_or(&node.identifier);
     match node.reference_kind {
         mdast::ReferenceKind::Shortcut => format!("[{}]", content),

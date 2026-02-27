@@ -568,19 +568,9 @@ const IGNORED_EXAMPLES: &[u32] = &[
     162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175,
     176, 177, 178, 179, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189,
     190, 191, 192, 193,
-    // Link text containing `]` (Foo*bar]): unescaped `]` prematurely closes
-    // the link text bracket, and `]` is not in the phrasing unsafe set.
-    196,
     // `<bar>` element in text: html5ever loses the unknown element's angle
     // brackets; can't distinguish from plain text after the round-trip.
     203,
-    // Empty blockquote after link: we drop empty blockquote elements.
-    220,
-    // Empty blockquotes: we produce no output for an empty <blockquote>.
-    241, 242,
-    // Two separate <ol> lists with different `start` attributes: we merge them
-    // into a single list and lose the start-value information.
-    304,
     // Nested list loose/tight: the inner item spreading makes parent items
     // loose, creating <p> wrappers that the spec HTML doesn't have.
     309,
@@ -589,8 +579,6 @@ const IGNORED_EXAMPLES: &[u32] = &[
     320, 321, 322, 323,
     // Backtick in link destination + malformed HTML causes two MDAST nodes.
     346,
-    // Nested <em><em>foo</em></em>: our converter collapses them into <strong>.
-    463, 465,
     // `*` in image title attribute; `alt` attribute presence difference.
     477,
     // `**` / `__` in link href creates ambiguous emphasis + link markdown.
@@ -602,22 +590,18 @@ const IGNORED_EXAMPLES: &[u32] = &[
     495,
     // `<b>` bold element and other formatting in paragraph text context.
     496,
-    // Link text with nested balanced brackets: our `[` escaping breaks the
-    // bracket balance so pulldown-cmark can't reconstruct the link.
-    514,
     // Image alt text containing link syntax `[foo](uri2)`: pulldown-cmark
     // evaluates the nested link and uses only its text as the alt.
     522,
     // Bracket characters inside HTML attribute values confuse link parsing.
-    526, 528, 530, 538, 540,
-    // `!` before `<a>` link: our converter escapes `!` before link children
-    // but phrasing context doesn't know the following sibling is a link.
-    595,
+    526, 528, 538, 540,
     // Raw inline HTML (615–635): html5ever normalizes/discards unknown or
     // invalid inline elements that the spec passes through verbatim.
     615, 616, 617, 618, 619, 620, 621, 622, 623, 624, 625, 626, 627, 628,
     629, 630, 631, 632, 633, 634, 635,
-    // Hard line breaks inside link URLs produce broken round-trips.
+    // Literal newline inside href attribute: CommonMark angle-bracket link
+    // destinations explicitly forbid line endings, so these URLs have no valid
+    // Markdown representation. Percent-encoding would change the href value.
     645, 646,
 ];
 

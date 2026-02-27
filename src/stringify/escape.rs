@@ -72,6 +72,50 @@ pub(crate) fn escape_phrasing(text: &str) -> String {
     result
 }
 
+/// Escape special Markdown characters in link text (the `[…]` part of a link).
+///
+/// Same as `escape_phrasing` but also escapes `]`, which prematurely closes
+/// the link text bracket. We don't escape `]` globally in phrasing because
+/// standalone `]` is harmless outside link context and escaping it breaks
+/// task-list checkbox syntax (`\[ ]`, `\[x]`) produced by the list handler.
+pub(crate) fn escape_link_text(text: &str) -> String {
+    static NEEDS_ESCAPE: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"[\\`*_\[\]!&<]").unwrap()
+    });
+
+    if !NEEDS_ESCAPE.is_match(text) {
+        return text.to_string();
+    }
+
+    let mut result = String::with_capacity(text.len() + 8);
+    let mut last = 0;
+    let bytes = text.as_bytes();
+
+    for (i, &b) in bytes.iter().enumerate() {
+        let escape = match b {
+            b'\\' => true,
+            b'[' => true,
+            b']' => true,
+            b'_' => true,
+            b'*' => true,
+            b'`' => true,
+            b'<' => true,
+            b'!' => bytes.get(i + 1) == Some(&b'['),
+            b'&' => matches!(bytes.get(i + 1), Some(b'#') | Some(b'A'..=b'Z') | Some(b'a'..=b'z')),
+            _ => false,
+        };
+
+        if escape {
+            result.push_str(&text[last..i]);
+            result.push('\\');
+            last = i;
+        }
+    }
+
+    result.push_str(&text[last..]);
+    result
+}
+
 /// Escape a character at the start of a block if it would trigger a Markdown construct.
 ///
 /// Port of the `atBreak` patterns in mdast-util-to-markdown/lib/unsafe.js.

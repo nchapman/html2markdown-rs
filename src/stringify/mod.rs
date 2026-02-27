@@ -82,9 +82,17 @@ pub(crate) struct State<'a> {
     pub bullet_current: Option<char>,
     /// Previous list's bullet (for alternation).
     pub bullet_last_used: Option<char>,
+    /// Delimiter used by the most recent adjacent ordered list (`.` or `)`).
+    /// Reset to None when a non-list node is encountered between lists.
+    /// Used to alternate between `.` and `)` when two ordered lists are adjacent,
+    /// preventing CommonMark parsers from merging them into a single list.
+    pub ordered_bullet_last_used: Option<char>,
     /// Whether the next text to be emitted is at the start of a block (atBreak).
     /// Used to apply at-break character escaping (e.g. `+` before space → `\+`).
     pub at_break: bool,
+    /// Whether we are currently inside link text (between `[` and `]`).
+    /// When true, `]` must be escaped to avoid prematurely closing the bracket.
+    pub in_link_text: bool,
 }
 
 impl<'a> State<'a> {
@@ -93,7 +101,9 @@ impl<'a> State<'a> {
             options,
             bullet_current: None,
             bullet_last_used: None,
+            ordered_bullet_last_used: None,
             at_break: false,
+            in_link_text: false,
         }
     }
 }

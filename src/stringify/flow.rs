@@ -20,11 +20,12 @@ pub(crate) fn container_flow(state: &mut State, children: &[Node]) -> String {
         let content = super::handlers::handle(state, child);
         result.push_str(&content);
 
-        // Reset bullet_last_used after any non-list node so sibling lists
-        // don't unnecessarily alternate bullets (port of JS containerFlow behavior:
-        // `if (child.type !== 'list') state.bulletLastUsed = undefined`).
+        // Reset bullet trackers after any non-list node so sibling lists
+        // don't unnecessarily alternate bullets/delimiters.
+        // Port of JS containerFlow: `if (child.type !== 'list') state.bulletLastUsed = undefined`
         if !matches!(child, Node::List(_)) {
             state.bullet_last_used = None;
+            state.ordered_bullet_last_used = None;
         }
     }
 
