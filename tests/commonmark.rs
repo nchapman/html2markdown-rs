@@ -571,12 +571,6 @@ const IGNORED_EXAMPLES: &[u32] = &[
     // `<bar>` element in text: html5ever loses the unknown element's angle
     // brackets; can't distinguish from plain text after the round-trip.
     203,
-    // Nested list loose/tight: the inner item spreading makes parent items
-    // loose, creating <p> wrappers that the spec HTML doesn't have.
-    309,
-    // Code block inside list item: tight list item with <pre> block inside
-    // produces extra blank lines in the code content after the round-trip.
-    320, 321, 322, 323,
     // Backtick in link destination + malformed HTML causes two MDAST nodes.
     346,
     // `*` in image title attribute; `alt` attribute presence difference.

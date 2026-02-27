@@ -339,8 +339,23 @@ fn is_block_element(tag: &str) -> bool {
 }
 
 /// Trim trailing newlines from a string.
+/// Strip exactly one trailing newline from code block content.
+///
+/// HTML serializers add a `\n` before `</code>` (e.g. `<pre><code>b\n</code>`).
+/// That single trailing `\n` is an artifact, not part of the code content.
+/// We strip it so the Markdown fenced block serializer can add its own `\n`
+/// before the closing fence without doubling up.
+///
+/// Trimming ALL trailing newlines (the original behavior) was too aggressive:
+/// it discarded intentional trailing blank lines in code content.
 fn trim_trailing_lines(s: &str) -> &str {
-    s.trim_end_matches(['\n', '\r'])
+    if let Some(stripped) = s.strip_suffix("\r\n") {
+        stripped
+    } else if let Some(stripped) = s.strip_suffix('\n') {
+        stripped
+    } else {
+        s
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -898,81 +913,40 @@ fn all_except_leading_checkbox(
     result
 }
 
-/// Check if a li element should be "spread" (has block content).
-/// Port of the `spreadout` function in hast-util-to-mdast/lib/handlers/li.js
+/// Check if a `<li>` element should be "spread" (loose) in the MDAST sense.
+///
+/// A list item is spread (loose) if:
+///   - it has a direct `<p>` child (CommonMark's signal for a loose item), OR
+///   - it has a direct `<div>` child that itself contains a `<p>` (generic
+///     container wrapping — recurse one level into `<div>` only).
+///
+/// We deliberately do NOT recurse into semantic block elements like
+/// `<blockquote>`, `<ul>`, `<ol>`, `<pre>`, etc. because those elements
+/// inherently contain `<p>` tags in CommonMark HTML even in tight lists.
+/// Recursing into them produces false positives:
+///   `<li>a<blockquote><p>b</p></blockquote></li>` is a TIGHT item,
+///   but the `<p>` inside the blockquote would trigger a false spread.
+///
+/// We also do NOT use a `seenFlow` rule (two or more block children → spread)
+/// because CommonMark allows tight list items with multiple block children:
+///   `<li>a<blockquote>…</blockquote><pre>…</pre></li>` is tight.
 fn spreadout(handle: &Handle) -> bool {
-    let mut seen_flow = false;
     for child in handle.children.borrow().iter() {
         if let NodeData::Element { ref name, .. } = child.data {
             let tag = name.local.as_ref();
-            if is_phrasing_element(tag) {
-                continue;
-            }
-            if tag == "p" || seen_flow || spreadout(child) {
+            // Direct <p> child → always spread.
+            if tag == "p" {
                 return true;
             }
-            seen_flow = true;
+            // <div> is a generic container; recurse one level to find <p>.
+            if tag == "div" && spreadout(child) {
+                return true;
+            }
         }
     }
     false
 }
 
-/// Whether an HTML tag name is a phrasing content element.
-fn is_phrasing_element(tag: &str) -> bool {
-    matches!(
-        tag,
-        "a" | "abbr"
-            | "acronym"
-            | "b"
-            | "bdi"
-            | "bdo"
-            | "big"
-            | "br"
-            | "button"
-            | "canvas"
-            | "cite"
-            | "code"
-            | "data"
-            | "del"
-            | "dfn"
-            | "em"
-            | "font"
-            | "i"
-            | "iframe"
-            | "img"
-            | "input"
-            | "ins"
-            | "kbd"
-            | "label"
-            | "map"
-            | "mark"
-            | "meter"
-            | "nobr"
-            | "noscript"
-            | "object"
-            | "output"
-            | "picture"
-            | "progress"
-            | "q"
-            | "ruby"
-            | "s"
-            | "samp"
-            | "select"
-            | "small"
-            | "span"
-            | "strong"
-            | "sub"
-            | "sup"
-            | "svg"
-            | "textarea"
-            | "time"
-            | "tt"
-            | "u"
-            | "var"
-            | "video"
-            | "wbr"
-    )
-}
 
 
 /// <ol>, <ul>, <dir> → List
