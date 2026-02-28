@@ -9,6 +9,7 @@ readme = "README.md"
 repository = "https://github.com/nchapman/html2markdown-rs"
 keywords = ["html", "markdown", "converter", "commonmark", "mdast"]
 categories = ["parser-implementations", "text-processing", "web-programming"]
+exclude = ["test-fixtures/", "benches/compare/"]
 
 [lib]
 name = "html2markdown"
