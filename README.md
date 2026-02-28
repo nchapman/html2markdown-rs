@@ -16,7 +16,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-html2markdown = "0.1"
+html2markdown = "0.2"
 ```
 
 ```rust
@@ -68,7 +68,7 @@ formatting, and the serializer knows nothing about HTML.
 | `tracing` | Enable debug/trace logging (zero-cost when disabled) |
 
 ```toml
-html2markdown = { version = "0.1", features = ["tracing"] }
+html2markdown = { version = "0.2", features = ["tracing"] }
 ```
 
 ## Benchmarks
