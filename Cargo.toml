@@ -1,6 +1,6 @@
 [package]
 name = "html2markdown"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 description = "HTML to Markdown converter using AST-to-AST transformation"
 license = "MIT"
