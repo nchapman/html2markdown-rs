@@ -16,6 +16,11 @@ use crate::mdast;
 
 /// Convert all children of an HTML node to MDAST nodes.
 pub(crate) fn all(state: &mut State, handle: &Handle) -> Vec<mdast::Node> {
+    // Early exit: one() would return empty vecs anyway at the limit,
+    // but this avoids even borrowing children at max depth.
+    if state.depth >= super::MAX_DEPTH {
+        return vec![];
+    }
     let children_ref = handle.children.borrow();
     let mut result = Vec::new();
     for child in children_ref.iter() {
@@ -27,6 +32,16 @@ pub(crate) fn all(state: &mut State, handle: &Handle) -> Vec<mdast::Node> {
 
 /// Convert a single HTML node to MDAST node(s).
 pub(crate) fn one(state: &mut State, handle: &Handle) -> Vec<mdast::Node> {
+    if state.depth >= super::MAX_DEPTH {
+        return vec![];
+    }
+    state.depth += 1;
+    let result = one_inner(state, handle);
+    state.depth -= 1;
+    result
+}
+
+fn one_inner(state: &mut State, handle: &Handle) -> Vec<mdast::Node> {
     match &handle.data {
         NodeData::Text { ref contents } => {
             let raw = contents.borrow().to_string();
@@ -96,9 +111,12 @@ fn dispatch_element(state: &mut State, handle: &Handle, tag: &str) -> Vec<mdast:
         | "time" => {
             let mut nodes = all(state, handle);
             if let Some(mdast::Node::Text(ref mut t)) = nodes.first_mut() {
-                t.value = t.value.trim_start_matches([' ', '\t']).to_string();
-                if t.value.is_empty() {
+                let trimmed_len = t.value.trim_start_matches([' ', '\t']).len();
+                if trimmed_len == 0 {
                     nodes.remove(0);
+                } else if trimmed_len != t.value.len() {
+                    let start = t.value.len() - trimmed_len;
+                    t.value.drain(..start);
                 }
             }
             nodes
@@ -1367,6 +1385,7 @@ fn handle_table(state: &mut State, handle: &Handle) -> Vec<mdast::Node> {
         return vec![mdast::Node::Text(mdast::Text { value: text })];
     }
 
+    let old_in_table = state.in_table;
     state.in_table = true;
 
     let (align, headless) = inspect_table(handle);
@@ -1488,7 +1507,7 @@ fn handle_table(state: &mut State, handle: &Handle) -> Vec<mdast::Node> {
         }
     }
 
-    state.in_table = false;
+    state.in_table = old_in_table;
 
     vec![mdast::Node::Table(mdast::Table {
         align,

@@ -93,6 +93,9 @@ pub(crate) struct State<'a> {
     /// Whether we are currently inside link text (between `[` and `]`).
     /// When true, `]` must be escaped to avoid prematurely closing the bracket.
     pub in_link_text: bool,
+    /// Whether we are currently inside a table cell.
+    /// When true, `|` must be escaped to avoid breaking table structure.
+    pub in_table_cell: bool,
 }
 
 impl<'a> State<'a> {
@@ -104,6 +107,7 @@ impl<'a> State<'a> {
             ordered_bullet_last_used: None,
             at_break: false,
             in_link_text: false,
+            in_table_cell: false,
         }
     }
 }

@@ -2,6 +2,8 @@
 //
 // One handler per MDAST node type. Each takes a State and Node, returns a String.
 
+use std::borrow::Cow;
+
 use super::State;
 use crate::mdast::{self, Node};
 
@@ -351,12 +353,19 @@ fn handle_text(state: &mut State, node: &mdast::Text) -> String {
     } else {
         super::escape::escape_phrasing(&node.value)
     };
+    // Escape `|` inside table cells to prevent breaking table structure.
+    // Port of mdast-util-to-markdown unsafe: {character: '|', inConstruct: 'tableCellContent'}
+    let escaped = if state.in_table_cell {
+        Cow::Owned(escaped.replace('|', "\\|"))
+    } else {
+        escaped
+    };
     // Apply at-break escaping if this text is at the start of a block.
     if state.at_break {
         state.at_break = false;
-        super::escape::escape_at_break_start(escaped)
+        super::escape::escape_at_break_start(escaped.into_owned())
     } else {
-        escaped
+        escaped.into_owned()
     }
 }
 
@@ -369,8 +378,11 @@ fn handle_emphasis(state: &mut State, node: &mdast::Emphasis) -> String {
     // Switch to the alternate delimiter to get `*_foo_*` / `_*foo*_`.
     // We do NOT switch for double-marker content like `**bar**` (strong),
     // because `***bar***` is correctly parsed as `<em><strong>…</strong></em>`.
-    let starts_single = content.starts_with(marker) && content.chars().nth(1) != Some(marker);
-    let ends_single = content.ends_with(marker) && content.chars().rev().nth(1) != Some(marker);
+    // Marker is always ASCII (* or _), so byte indexing is safe and O(1).
+    let m = marker as u8;
+    let bytes = content.as_bytes();
+    let starts_single = bytes.first() == Some(&m) && bytes.get(1) != Some(&m);
+    let ends_single = bytes.last() == Some(&m) && bytes.len() >= 2 && bytes[bytes.len() - 2] != m;
     let actual_marker = if starts_single || ends_single {
         if marker == '*' {
             '_'
@@ -549,7 +561,9 @@ fn handle_table(state: &mut State, node: &mdast::Table) -> String {
                 .iter()
                 .map(|cell| {
                     if let Node::TableCell(tc) = cell {
+                        state.in_table_cell = true;
                         let content = super::phrasing::container_phrasing(state, &tc.children);
+                        state.in_table_cell = false;
                         // Hard breaks (\<LF>) → space; bare newlines → &#xA; escape.
                         content.trim().replace("\\\n", " ").replace('\n', "&#xA;")
                     } else {
@@ -571,7 +585,9 @@ fn handle_table(state: &mut State, node: &mdast::Table) -> String {
     for row in &rows {
         for (i, cell) in row.iter().enumerate() {
             if i < col_count {
-                col_widths[i] = col_widths[i].max(cell.len());
+                // Measures escaped string length — sequences like \| count as 2 chars
+                // but render as 1. Matches JS reference behavior; parsers ignore extra padding.
+                col_widths[i] = col_widths[i].max(cell.chars().count());
             }
         }
     }

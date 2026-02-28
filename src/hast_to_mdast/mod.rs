@@ -35,6 +35,10 @@ pub struct TransformOptions {
     pub quotes: Vec<String>,
 }
 
+/// Maximum recursion depth for tree traversal. Prevents stack overflow on
+/// adversarial deeply-nested HTML (e.g., `<div>` nested 3000+ times).
+pub(crate) const MAX_DEPTH: usize = 256;
+
 /// Transformation state threaded through all handlers.
 pub(crate) struct State {
     /// Base URL from the first `<base>` element encountered.
@@ -52,6 +56,8 @@ pub(crate) struct State {
     pub element_by_id: HashMap<String, Handle>,
     /// Transform options.
     pub options: TransformOptions,
+    /// Current recursion depth for tree traversal.
+    pub depth: usize,
 }
 
 impl State {
@@ -64,6 +70,7 @@ impl State {
             q_nesting: 0,
             element_by_id: HashMap::new(),
             options,
+            depth: 0,
         }
     }
 
@@ -114,6 +121,13 @@ pub(crate) fn parse_html(html: &str) -> RcDom {
 
 /// Recursively index all elements by their `id` attribute.
 fn index_ids(handle: &Handle, map: &mut HashMap<String, Handle>) {
+    index_ids_inner(handle, map, 0);
+}
+
+fn index_ids_inner(handle: &Handle, map: &mut HashMap<String, Handle>, depth: usize) {
+    if depth >= MAX_DEPTH {
+        return;
+    }
     if let NodeData::Element { ref attrs, .. } = handle.data {
         for attr in attrs.borrow().iter() {
             if attr.name.local.as_ref() == "id" {
@@ -125,6 +139,6 @@ fn index_ids(handle: &Handle, map: &mut HashMap<String, Handle>) {
         }
     }
     for child in handle.children.borrow().iter() {
-        index_ids(child, map);
+        index_ids_inner(child, map, depth + 1);
     }
 }

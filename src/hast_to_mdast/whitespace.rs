@@ -8,10 +8,17 @@ use crate::mdast::Node;
 
 /// Run whitespace post-processing on an MDAST tree.
 pub(crate) fn post_process_whitespace(node: &mut Node) {
+    post_process_whitespace_inner(node, 0);
+}
+
+fn post_process_whitespace_inner(node: &mut Node, depth: usize) {
+    if depth >= super::MAX_DEPTH {
+        return;
+    }
     // Recursively process children first.
     if let Some(children) = node.children_mut() {
         for child in children.iter_mut() {
-            post_process_whitespace(child);
+            post_process_whitespace_inner(child, depth + 1);
         }
 
         // Merge adjacent text nodes.
@@ -74,7 +81,10 @@ fn normalize_inline_boundaries(children: &mut Vec<Node>) {
             // Dedup: remove leading space from the following text — the space
             // belongs inside the inline element.
             if let Node::Text(ref mut t) = children[i + 1] {
-                t.value = t.value.trim_start_matches(' ').to_string();
+                let trimmed = t.value.trim_start_matches(' ');
+                if trimmed.len() != t.value.len() {
+                    t.value = trimmed.to_string();
+                }
             }
             // The following sibling no longer starts with space, so the
             // trailing space of the inline element is the only separator:
@@ -124,7 +134,11 @@ fn inline_last_text_ends_with_space(node: &Node) -> bool {
 fn trim_inline_leading(node: &mut Node) {
     if let Some(children) = node.children_mut() {
         if let Some(Node::Text(ref mut t)) = children.first_mut() {
-            t.value = t.value.trim_start_matches(' ').to_string();
+            let trimmed_len = t.value.trim_start_matches(' ').len();
+            if trimmed_len != t.value.len() {
+                let start = t.value.len() - trimmed_len;
+                t.value.drain(..start);
+            }
         }
     }
 }
@@ -133,7 +147,10 @@ fn trim_inline_leading(node: &mut Node) {
 fn trim_inline_trailing(node: &mut Node) {
     if let Some(children) = node.children_mut() {
         if let Some(Node::Text(ref mut t)) = children.last_mut() {
-            t.value = t.value.trim_end_matches(' ').to_string();
+            let trimmed_len = t.value.trim_end_matches(' ').len();
+            if trimmed_len != t.value.len() {
+                t.value.truncate(trimmed_len);
+            }
         }
     }
 }
@@ -161,16 +178,20 @@ fn merge_adjacent_text(children: &mut Vec<Node>) {
 /// in the text of the preceding paragraph).
 fn trim_container(children: &mut [Node]) {
     if let Some(Node::Text(ref mut first)) = children.first_mut() {
-        first.value = first
+        let trimmed_len = first
             .value
             .trim_start_matches([' ', '\t', '\n', '\r'])
-            .to_string();
+            .len();
+        if trimmed_len != first.value.len() {
+            let start = first.value.len() - trimmed_len;
+            first.value.drain(..start);
+        }
     }
     if let Some(Node::Text(ref mut last)) = children.last_mut() {
-        last.value = last
-            .value
-            .trim_end_matches([' ', '\t', '\n', '\r'])
-            .to_string();
+        let trimmed_len = last.value.trim_end_matches([' ', '\t', '\n', '\r']).len();
+        if trimmed_len != last.value.len() {
+            last.value.truncate(trimmed_len);
+        }
     }
 }
 

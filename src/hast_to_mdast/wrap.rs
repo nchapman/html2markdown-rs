@@ -80,13 +80,40 @@ fn flatten(nodes: Vec<Node>) -> Vec<Node> {
     result
 }
 
+/// A template for recreating Link/Delete wrappers without cloning children.
+enum WrapperTemplate {
+    Link { url: String, title: Option<String> },
+    Delete,
+}
+
+impl WrapperTemplate {
+    fn wrap(&self, children: Vec<Node>) -> Node {
+        match self {
+            WrapperTemplate::Link { url, title } => Node::Link(mdast::Link {
+                url: url.clone(),
+                title: title.clone(),
+                children,
+            }),
+            WrapperTemplate::Delete => Node::Delete(mdast::Delete { children }),
+        }
+    }
+}
+
 /// Split a straddling node (Link or Delete containing block content) into
 /// multiple nodes where the inline wrapper distributes around blocks.
 /// Port of hast-util-to-mdast/lib/util/wrap.js `split()`.
 fn split_straddling(node: Node) -> Vec<Node> {
-    let children = match node.children().map(|c| c.to_vec()) {
-        Some(c) => c,
-        None => return vec![node],
+    // Destructure to take ownership of children without cloning.
+    let (template, children) = match node {
+        Node::Link(l) => (
+            WrapperTemplate::Link {
+                url: l.url,
+                title: l.title,
+            },
+            l.children,
+        ),
+        Node::Delete(d) => (WrapperTemplate::Delete, d.children),
+        _ => return vec![node],
     };
 
     let mut result: Vec<Node> = Vec::new();
@@ -98,60 +125,46 @@ fn split_straddling(node: Node) -> Vec<Node> {
         } else {
             if !phrasing_run.is_empty() {
                 let run = std::mem::take(&mut phrasing_run);
-                // Only emit the wrapper if the phrasing run has non-whitespace content.
                 if !is_whitespace_only(&run) {
-                    let wrapper = clone_with_children(&node, run);
-                    result.push(wrapper);
+                    result.push(template.wrap(run));
                 }
             }
-            // For non-phrasing: if child has children, wrap the parent inside it.
-            let new_node = wrap_parent_inside_child(&node, child);
+            let new_node = wrap_parent_inside_child(&template, child);
             result.push(new_node);
         }
     }
 
     if !phrasing_run.is_empty() && !is_whitespace_only(&phrasing_run) {
-        let wrapper = clone_with_children(&node, phrasing_run);
-        result.push(wrapper);
+        result.push(template.wrap(phrasing_run));
     }
 
     result
 }
 
-/// Create a new node of the same type as `parent` with the given children.
-fn clone_with_children(parent: &Node, children: Vec<Node>) -> Node {
-    match parent {
-        Node::Link(l) => Node::Link(mdast::Link {
-            url: l.url.clone(),
-            title: l.title.clone(),
-            children,
-        }),
-        Node::Delete(_) => Node::Delete(mdast::Delete { children }),
-        _ => Node::Paragraph(mdast::Paragraph { children }),
-    }
-}
-
 /// Place the `parent` (without its original children) as a wrapper inside `child`.
 /// If `child` has children, the parent wraps the child's content.
-fn wrap_parent_inside_child(parent: &Node, child: Node) -> Node {
-    if let Some(child_children) = child.children().map(|c| c.to_vec()) {
-        // Create parent wrapping child's children.
-        let inner = clone_with_children(parent, child_children);
-        // Replace child's children with the wrapped content.
-        match child {
-            Node::Heading(h) => Node::Heading(mdast::Heading {
+fn wrap_parent_inside_child(template: &WrapperTemplate, child: Node) -> Node {
+    // Destructure child to take ownership of its children without cloning.
+    match child {
+        Node::Heading(h) => {
+            let inner = template.wrap(h.children);
+            Node::Heading(mdast::Heading {
                 depth: h.depth,
                 children: vec![inner],
-            }),
-            Node::Paragraph(_) => Node::Paragraph(mdast::Paragraph {
-                children: vec![inner],
-            }),
-            Node::Blockquote(_) => Node::Blockquote(mdast::Blockquote {
-                children: vec![inner],
-            }),
-            other => other,
+            })
         }
-    } else {
-        child
+        Node::Paragraph(p) => {
+            let inner = template.wrap(p.children);
+            Node::Paragraph(mdast::Paragraph {
+                children: vec![inner],
+            })
+        }
+        Node::Blockquote(bq) => {
+            let inner = template.wrap(bq.children);
+            Node::Blockquote(mdast::Blockquote {
+                children: vec![inner],
+            })
+        }
+        other => other,
     }
 }

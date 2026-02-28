@@ -50,3 +50,37 @@ fn single_tilde_not_escaped() {
     let md = html_to_markdown::convert("<p>~/.bashrc</p>");
     assert_eq!(md, "~/.bashrc\n");
 }
+
+/// Pipe characters in table cells must be escaped to prevent breaking table structure.
+#[test]
+fn pipe_in_table_cell_escaped() {
+    let md =
+        html_to_markdown::convert("<table><tr><th>Header</th></tr><tr><td>a|b</td></tr></table>");
+    assert!(
+        md.contains("a\\|b"),
+        "pipe in table cell should be escaped: {md:?}"
+    );
+}
+
+/// Pipe escaping should not apply outside of tables.
+#[test]
+fn pipe_not_escaped_outside_table() {
+    let md = html_to_markdown::convert("<p>a|b</p>");
+    assert_eq!(md, "a|b\n");
+}
+
+/// Deeply nested HTML should not cause a stack overflow.
+#[test]
+fn deep_nesting_no_stack_overflow() {
+    // 3000 nested divs — well beyond the depth limit. Must not panic.
+    let html = "<div>".repeat(3000) + "deep text" + &"</div>".repeat(3000);
+    let _ = html_to_markdown::convert(&html);
+
+    // Text at shallow depth (within limit) must still be converted.
+    let shallow = "<div>".repeat(100) + "shallow text" + &"</div>".repeat(100);
+    let md = html_to_markdown::convert(&shallow);
+    assert!(
+        md.contains("shallow text"),
+        "shallow content should survive depth limit: {md:?}"
+    );
+}

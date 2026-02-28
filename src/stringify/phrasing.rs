@@ -22,12 +22,15 @@ pub(crate) fn container_phrasing(state: &mut State, children: &[Node]) -> String
     for i in 0..parts.len() {
         if parts[i] == "\\\n" {
             if i > 0 {
-                let prev = parts[i - 1].trim_end_matches(' ').to_string();
-                parts[i - 1] = prev;
+                let trimmed_len = parts[i - 1].trim_end_matches(' ').len();
+                parts[i - 1].truncate(trimmed_len);
             }
             if i + 1 < parts.len() {
-                let next = parts[i + 1].trim_start_matches(' ').to_string();
-                parts[i + 1] = next;
+                let trimmed = parts[i + 1].trim_start_matches(' ');
+                if trimmed.len() != parts[i + 1].len() {
+                    let start = parts[i + 1].len() - trimmed.len();
+                    parts[i + 1].drain(..start);
+                }
             }
         }
     }

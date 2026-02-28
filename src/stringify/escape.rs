@@ -4,6 +4,7 @@
 // Escapes Markdown syntax characters in text content to prevent unintended
 // formatting. Implements the subset of unsafe patterns needed for phrasing content.
 
+use std::borrow::Cow;
 use std::sync::LazyLock;
 
 use regex::Regex;
@@ -23,7 +24,7 @@ use regex::Regex;
 /// Note: `]` is intentionally NOT escaped here — a standalone `]` without a
 /// preceding `[` is harmless, and escaping it breaks task-list checkbox syntax
 /// (`\[ ]`, `\[x]`) produced by the list-item serializer.
-pub(crate) fn escape_phrasing(text: &str) -> String {
+pub(crate) fn escape_phrasing(text: &str) -> Cow<'_, str> {
     // These patterns are based on the `unsafe` array in mdast-util-to-markdown/lib/unsafe.js:
     // - {character: '[', inConstruct: 'phrasing'} — can start links/images
     // - {character: '_', inConstruct: 'phrasing'} — can start emphasis/strong
@@ -39,9 +40,9 @@ pub(crate) fn escape_phrasing(text: &str) -> String {
         Regex::new(r"[\\`*_\[!&<]|~~").unwrap()
     });
 
-    // Fast path: no special characters.
+    // Fast path: no special characters — return borrowed slice, zero allocation.
     if !NEEDS_ESCAPE.is_match(text) {
-        return text.to_string();
+        return Cow::Borrowed(text);
     }
 
     // SAFETY: We iterate by byte offset and index back into the &str with
@@ -82,7 +83,7 @@ pub(crate) fn escape_phrasing(text: &str) -> String {
     }
 
     result.push_str(&text[last..]);
-    result
+    Cow::Owned(result)
 }
 
 /// Escape special Markdown characters in link text (the `[…]` part of a link).
@@ -91,12 +92,13 @@ pub(crate) fn escape_phrasing(text: &str) -> String {
 /// the link text bracket. We don't escape `]` globally in phrasing because
 /// standalone `]` is harmless outside link context and escaping it breaks
 /// task-list checkbox syntax (`\[ ]`, `\[x]`) produced by the list handler.
-pub(crate) fn escape_link_text(text: &str) -> String {
+pub(crate) fn escape_link_text(text: &str) -> Cow<'_, str> {
     static NEEDS_ESCAPE: LazyLock<Regex> =
         LazyLock::new(|| Regex::new(r"[\\`*_\[\]!&<]|~~").unwrap());
 
+    // Fast path: no special characters — return borrowed slice, zero allocation.
     if !NEEDS_ESCAPE.is_match(text) {
-        return text.to_string();
+        return Cow::Borrowed(text);
     }
 
     // SAFETY: Same byte-indexing invariant as escape_phrasing — all matched
@@ -131,14 +133,14 @@ pub(crate) fn escape_link_text(text: &str) -> String {
     }
 
     result.push_str(&text[last..]);
-    result
+    Cow::Owned(result)
 }
 
 /// Escape a character at the start of a block if it would trigger a Markdown construct.
 ///
 /// Port of the `atBreak` patterns in mdast-util-to-markdown/lib/unsafe.js.
 /// Returns the escaped version of content whose first character is at a line break.
-pub(crate) fn escape_at_break_start(content: String) -> String {
+pub(crate) fn escape_at_break_start(mut content: String) -> String {
     let bytes = content.as_bytes();
     if bytes.is_empty() {
         return content;
@@ -171,10 +173,9 @@ pub(crate) fn escape_at_break_start(content: String) -> String {
     };
 
     if needs_escape {
-        format!("\\{}", content)
-    } else {
-        content
+        content.insert(0, '\\');
     }
+    content
 }
 
 #[cfg(test)]
