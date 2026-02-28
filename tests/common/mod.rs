@@ -17,7 +17,9 @@ pub struct FixtureOptions {
 ///
 /// Fixture directories contain `index.html`, `index.md`, and optionally `index.json`.
 pub fn load_fixture(name: &str) -> FixtureOptions {
-    let base = Path::new(env!("CARGO_MANIFEST_DIR")).join("test-fixtures").join(name);
+    let base = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("test-fixtures")
+        .join(name);
     let html = fs::read_to_string(base.join("index.html"))
         .unwrap_or_else(|_| panic!("Missing fixture: {}/index.html", name));
     let md = fs::read_to_string(base.join("index.md"))
@@ -50,5 +52,10 @@ pub fn load_fixture(name: &str) -> FixtureOptions {
         }
     }
 
-    FixtureOptions { html, expected_md: md, options, fragment }
+    FixtureOptions {
+        html,
+        expected_md: md,
+        options,
+        fragment,
+    }
 }

@@ -7,16 +7,14 @@
 //   - hast-util-to-mdast (transformer): https://github.com/syntax-tree/hast-util-to-mdast
 //   - mdast-util-to-markdown (serializer): https://github.com/syntax-tree/mdast-util-to-markdown
 
-mod error;
-pub mod mdast;
 mod hast_to_mdast;
+pub mod mdast;
 mod stringify;
 
-pub use error::HtmlToMarkdownError;
 pub use stringify::{HeadingStyle, ListItemIndent, StringifyOptions};
 
 /// Conversion options.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct Options {
     /// Serializer formatting options.
     pub stringify: StringifyOptions,
@@ -32,6 +30,18 @@ pub struct Options {
     pub quotes: Vec<String>,
 }
 
+impl Default for Options {
+    fn default() -> Self {
+        Self {
+            stringify: StringifyOptions::default(),
+            newlines: false,
+            checked: None,
+            unchecked: None,
+            quotes: vec!["\"".to_string()],
+        }
+    }
+}
+
 impl Options {
     /// Create a new Options with default settings.
     pub fn new() -> Self {
@@ -45,43 +55,99 @@ impl Options {
     }
 
     /// Set the unordered list bullet character.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `bullet` is not one of `*`, `-`, or `+`.
     pub fn with_bullet(mut self, bullet: char) -> Self {
+        assert!(
+            matches!(bullet, '*' | '-' | '+'),
+            "bullet must be '*', '-', or '+', got '{bullet}'"
+        );
         self.stringify.bullet = bullet;
         self
     }
 
-    /// Set the ordered list bullet character.
+    /// Set the ordered list bullet character (`.` or `)`).
+    ///
+    /// # Panics
+    ///
+    /// Panics if `bullet` is not `.` or `)`.
     pub fn with_bullet_ordered(mut self, bullet: char) -> Self {
+        assert!(
+            matches!(bullet, '.' | ')'),
+            "bullet_ordered must be '.' or ')', got '{bullet}'"
+        );
         self.stringify.bullet_ordered = bullet;
         self
     }
 
-    /// Set the emphasis marker character.
+    /// Set the emphasis marker character (`*` or `_`).
+    ///
+    /// # Panics
+    ///
+    /// Panics if `marker` is not `*` or `_`.
     pub fn with_emphasis(mut self, marker: char) -> Self {
+        assert!(
+            matches!(marker, '*' | '_'),
+            "emphasis must be '*' or '_', got '{marker}'"
+        );
         self.stringify.emphasis = marker;
         self
     }
 
-    /// Set the strong marker character.
+    /// Set the strong marker character (`*` or `_`).
+    ///
+    /// # Panics
+    ///
+    /// Panics if `marker` is not `*` or `_`.
     pub fn with_strong(mut self, marker: char) -> Self {
+        assert!(
+            matches!(marker, '*' | '_'),
+            "strong must be '*' or '_', got '{marker}'"
+        );
         self.stringify.strong = marker;
         self
     }
 
-    /// Set the fenced code block marker character.
+    /// Set the fenced code block marker character (`` ` `` or `~`).
+    ///
+    /// # Panics
+    ///
+    /// Panics if `fence` is not `` ` `` or `~`.
     pub fn with_fence(mut self, fence: char) -> Self {
+        assert!(
+            matches!(fence, '`' | '~'),
+            "fence must be '`' or '~', got '{fence}'"
+        );
         self.stringify.fence = fence;
         self
     }
 
-    /// Set the thematic break rule character.
+    /// Set the thematic break rule character (`*`, `-`, or `_`).
+    ///
+    /// # Panics
+    ///
+    /// Panics if `rule` is not `*`, `-`, or `_`.
     pub fn with_rule(mut self, rule: char) -> Self {
+        assert!(
+            matches!(rule, '*' | '-' | '_'),
+            "rule must be '*', '-', or '_', got '{rule}'"
+        );
         self.stringify.rule = rule;
         self
     }
 
-    /// Set the number of thematic break markers.
+    /// Set the number of thematic break markers (minimum 3).
+    ///
+    /// # Panics
+    ///
+    /// Panics if `count` is less than 3.
     pub fn with_rule_repetition(mut self, count: u8) -> Self {
+        assert!(
+            count >= 3,
+            "rule_repetition must be at least 3, got {count}"
+        );
         self.stringify.rule_repetition = count;
         self
     }
@@ -110,8 +176,16 @@ impl Options {
         self
     }
 
-    /// Set the quote character for titles.
+    /// Set the quote character for titles (`"` or `'`).
+    ///
+    /// # Panics
+    ///
+    /// Panics if `quote` is not `"` or `'`.
     pub fn with_quote(mut self, quote: char) -> Self {
+        assert!(
+            matches!(quote, '"' | '\''),
+            "quote must be '\"' or '\\'', got '{quote}'"
+        );
         self.stringify.quote = quote;
         self
     }
@@ -140,10 +214,10 @@ impl Options {
 /// # Examples
 ///
 /// ```
-/// let md = html_to_markdown::convert("<h1>Hello</h1><p>World</p>").unwrap();
+/// let md = html_to_markdown::convert("<h1>Hello</h1><p>World</p>");
 /// assert!(md.contains("Hello"));
 /// ```
-pub fn convert(html: &str) -> Result<String, HtmlToMarkdownError> {
+pub fn convert(html: &str) -> String {
     convert_with(html, &Options::default())
 }
 
@@ -155,26 +229,23 @@ pub fn convert(html: &str) -> Result<String, HtmlToMarkdownError> {
 /// use html_to_markdown::{convert_with, Options, HeadingStyle};
 ///
 /// let options = Options::new().with_heading_style(HeadingStyle::Setext);
-/// let md = convert_with("<h1>Hello</h1>", &options).unwrap();
+/// let md = convert_with("<h1>Hello</h1>", &options);
 /// assert!(md.contains("Hello"));
 /// ```
-pub fn convert_with(html: &str, options: &Options) -> Result<String, HtmlToMarkdownError> {
-    let mdast = html_to_mdast(html, options)?;
-    Ok(mdast_to_string(&mdast, &options.stringify))
+pub fn convert_with(html: &str, options: &Options) -> String {
+    let mdast = html_to_mdast(html, options);
+    mdast_to_string(&mdast, &options.stringify)
 }
 
 /// Parse HTML and transform it into an MDAST tree.
-pub fn html_to_mdast(
-    html: &str,
-    options: &Options,
-) -> Result<mdast::Node, HtmlToMarkdownError> {
+pub fn html_to_mdast(html: &str, options: &Options) -> mdast::Node {
     let transform_options = hast_to_mdast::TransformOptions {
         newlines: options.newlines,
         checked: options.checked.clone(),
         unchecked: options.unchecked.clone(),
         quotes: options.quotes.clone(),
     };
-    Ok(hast_to_mdast::transform(html, transform_options))
+    hast_to_mdast::transform(html, transform_options)
 }
 
 /// Serialize an MDAST tree to a Markdown string.
@@ -188,19 +259,19 @@ mod tests {
 
     #[test]
     fn test_convert_empty() {
-        let result = convert("").unwrap();
+        let result = convert("");
         assert_eq!(result, "");
     }
 
     #[test]
     fn test_convert_simple_paragraph() {
-        let result = convert("<p>Hello, world!</p>").unwrap();
+        let result = convert("<p>Hello, world!</p>");
         assert!(result.contains("Hello, world!"));
     }
 
     #[test]
     fn test_convert_heading() {
-        let result = convert("<h1>Title</h1>").unwrap();
+        let result = convert("<h1>Title</h1>");
         assert!(result.contains("Title"));
     }
 

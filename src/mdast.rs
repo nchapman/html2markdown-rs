@@ -184,11 +184,20 @@ pub struct TableRow {
 pub struct TableCell {
     pub children: Vec<Node>,
     /// Column span (from HTML colspan attribute); used during transformation, not serialization.
-    #[doc(hidden)]
-    pub colspan: Option<u32>,
+    pub(crate) colspan: Option<u32>,
     /// Row span (from HTML rowspan attribute); used during transformation, not serialization.
-    #[doc(hidden)]
-    pub rowspan: Option<u32>,
+    pub(crate) rowspan: Option<u32>,
+}
+
+impl TableCell {
+    /// Create a new table cell with the given children.
+    pub fn new(children: Vec<Node>) -> Self {
+        Self {
+            children,
+            colspan: None,
+            rowspan: None,
+        }
+    }
 }
 
 /// Footnote definition (`[^id]: ...`).

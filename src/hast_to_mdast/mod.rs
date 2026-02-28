@@ -5,6 +5,7 @@
 // element to a handler that produces MDAST nodes.
 
 pub(crate) mod handlers;
+pub(crate) mod util;
 pub(crate) mod whitespace;
 pub(crate) mod wrap;
 
@@ -33,7 +34,6 @@ pub struct TransformOptions {
     /// Default: `['"']` (ASCII double-quote).
     pub quotes: Vec<String>,
 }
-
 
 /// Transformation state threaded through all handlers.
 pub(crate) struct State {

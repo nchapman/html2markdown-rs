@@ -44,6 +44,11 @@ pub(crate) fn escape_phrasing(text: &str) -> String {
         return text.to_string();
     }
 
+    // SAFETY: We iterate by byte offset and index back into the &str with
+    // `&text[last..i]`. This is sound because every character we match on
+    // (\ [ ] _ * ` ~ < ! &) is single-byte ASCII. ASCII bytes are never part
+    // of a multi-byte UTF-8 sequence, so byte offsets at these characters are
+    // always valid UTF-8 boundaries.
     let mut result = String::with_capacity(text.len() + 8);
     let mut last = 0;
     let bytes = text.as_bytes();
@@ -62,7 +67,10 @@ pub(crate) fn escape_phrasing(text: &str) -> String {
             // `!` only needs escaping before `[` (potential image)
             b'!' => bytes.get(i + 1) == Some(&b'['),
             // `&` before alphanumeric or `#` (character reference)
-            b'&' => matches!(bytes.get(i + 1), Some(b'#') | Some(b'A'..=b'Z') | Some(b'a'..=b'z')),
+            b'&' => matches!(
+                bytes.get(i + 1),
+                Some(b'#') | Some(b'A'..=b'Z') | Some(b'a'..=b'z')
+            ),
             _ => false,
         };
 
@@ -84,14 +92,15 @@ pub(crate) fn escape_phrasing(text: &str) -> String {
 /// standalone `]` is harmless outside link context and escaping it breaks
 /// task-list checkbox syntax (`\[ ]`, `\[x]`) produced by the list handler.
 pub(crate) fn escape_link_text(text: &str) -> String {
-    static NEEDS_ESCAPE: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(r"[\\`*_\[\]!&<]|~~").unwrap()
-    });
+    static NEEDS_ESCAPE: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"[\\`*_\[\]!&<]|~~").unwrap());
 
     if !NEEDS_ESCAPE.is_match(text) {
         return text.to_string();
     }
 
+    // SAFETY: Same byte-indexing invariant as escape_phrasing — all matched
+    // characters are single-byte ASCII, so byte offsets are valid UTF-8 boundaries.
     let mut result = String::with_capacity(text.len() + 8);
     let mut last = 0;
     let bytes = text.as_bytes();
@@ -107,7 +116,10 @@ pub(crate) fn escape_link_text(text: &str) -> String {
             b'~' => bytes.get(i + 1) == Some(&b'~'),
             b'<' => true,
             b'!' => bytes.get(i + 1) == Some(&b'['),
-            b'&' => matches!(bytes.get(i + 1), Some(b'#') | Some(b'A'..=b'Z') | Some(b'a'..=b'z')),
+            b'&' => matches!(
+                bytes.get(i + 1),
+                Some(b'#') | Some(b'A'..=b'Z') | Some(b'a'..=b'z')
+            ),
             _ => false,
         };
 

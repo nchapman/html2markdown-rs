@@ -6,6 +6,7 @@
 
 use markup5ever_rcdom::{Handle, NodeData};
 
+use super::util::{drop_surrounding_breaks, is_whitespace_only};
 use super::State;
 use crate::mdast;
 
@@ -15,9 +16,9 @@ use crate::mdast;
 
 /// Convert all children of an HTML node to MDAST nodes.
 pub(crate) fn all(state: &mut State, handle: &Handle) -> Vec<mdast::Node> {
-    let children: Vec<Handle> = handle.children.borrow().clone();
+    let children_ref = handle.children.borrow();
     let mut result = Vec::new();
-    for child in &children {
+    for child in children_ref.iter() {
         let mut nodes = one(state, child);
         result.append(&mut nodes);
     }
@@ -48,10 +49,18 @@ pub(crate) fn one(state: &mut State, handle: &Handle) -> Vec<mdast::Node> {
             let value = format!("<!--{}-->", contents);
             vec![mdast::Node::Html(mdast::Html { value })]
         }
-        NodeData::Element { ref name, ref attrs, .. } => {
+        NodeData::Element {
+            ref name,
+            ref attrs,
+            ..
+        } => {
             let tag = name.local.as_ref();
             // data-mdast="ignore" suppresses the element and its subtree.
-            if attrs.borrow().iter().any(|a| a.name.local.as_ref() == "data-mdast" && a.value.as_ref() == "ignore") {
+            if attrs
+                .borrow()
+                .iter()
+                .any(|a| a.name.local.as_ref() == "data-mdast" && a.value.as_ref() == "ignore")
+            {
                 return vec![];
             }
             dispatch_element(state, handle, tag)
@@ -69,23 +78,22 @@ pub(crate) fn one(state: &mut State, handle: &Handle) -> Vec<mdast::Node> {
 fn dispatch_element(state: &mut State, handle: &Handle, tag: &str) -> Vec<mdast::Node> {
     match tag {
         // Ignore — return nothing
-        "applet" | "area" | "basefont" | "bgsound" | "caption" | "col" | "colgroup"
-        | "command" | "content" | "datalist" | "dialog" | "element" | "embed" | "frame"
-        | "frameset" | "isindex" | "keygen" | "link" | "math" | "menu" | "menuitem"
-        | "meta" | "nextid" | "noembed" | "noframes" | "optgroup" | "option" | "param"
-        | "script" | "shadow" | "source" | "spacer" | "style" | "svg" | "template"
-        | "title" | "track" => vec![],
+        "applet" | "area" | "basefont" | "bgsound" | "caption" | "col" | "colgroup" | "command"
+        | "content" | "datalist" | "dialog" | "element" | "embed" | "frame" | "frameset"
+        | "isindex" | "keygen" | "link" | "math" | "menu" | "menuitem" | "meta" | "nextid"
+        | "noembed" | "noframes" | "optgroup" | "option" | "param" | "script" | "shadow"
+        | "source" | "spacer" | "style" | "svg" | "template" | "title" | "track" => vec![],
 
         // Pass-through — recurse into children, no wrapping.
         // Trim leading whitespace from the first text result: in HTML, the
         // leading whitespace of an inline transparent element is insignificant
         // because the gap before it is already provided by the preceding text
         // (mirrors rehype-minify-whitespace behaviour for inline elements).
-        "abbr" | "acronym" | "bdi" | "bdo" | "big" | "blink" | "button" | "canvas"
-        | "cite" | "data" | "details" | "dfn" | "font" | "ins" | "label" | "map"
-        | "marquee" | "meter" | "nobr" | "object" | "output" | "progress"
-        | "rb" | "rbc" | "rp" | "rt" | "rtc" | "ruby" | "slot" | "small" | "span"
-        | "sup" | "sub" | "tbody" | "tfoot" | "thead" | "time" => {
+        "abbr" | "acronym" | "bdi" | "bdo" | "big" | "blink" | "button" | "canvas" | "cite"
+        | "data" | "details" | "dfn" | "font" | "ins" | "label" | "map" | "marquee" | "meter"
+        | "nobr" | "object" | "output" | "progress" | "rb" | "rbc" | "rp" | "rt" | "rtc"
+        | "ruby" | "slot" | "small" | "span" | "sup" | "sub" | "tbody" | "tfoot" | "thead"
+        | "time" => {
             let mut nodes = all(state, handle);
             if let Some(mdast::Node::Text(ref mut t)) = nodes.first_mut() {
                 t.value = t.value.trim_start_matches([' ', '\t']).to_string();
@@ -101,9 +109,9 @@ fn dispatch_element(state: &mut State, handle: &Handle, tag: &str) -> Vec<mdast:
         "noscript" => handle_noscript(state, handle),
 
         // Flow wrappers — children wrapped as flow content
-        "address" | "article" | "aside" | "body" | "center" | "div" | "fieldset"
-        | "figcaption" | "figure" | "form" | "footer" | "header" | "hgroup" | "html"
-        | "legend" | "main" | "multicol" | "nav" | "picture" | "section" => {
+        "address" | "article" | "aside" | "body" | "center" | "div" | "fieldset" | "figcaption"
+        | "figure" | "form" | "footer" | "header" | "hgroup" | "html" | "legend" | "main"
+        | "multicol" | "nav" | "picture" | "section" => {
             let children = all(state, handle);
             super::wrap::wrap(children)
         }
@@ -157,12 +165,21 @@ pub(crate) fn get_attr(handle: &Handle, name: &str) -> Option<String> {
     None
 }
 
-/// Get the tag name of an element node as an owned String.
-pub(crate) fn tag_name(handle: &Handle) -> Option<String> {
-    if let NodeData::Element { ref name, .. } = handle.data {
-        Some(name.local.as_ref().to_string())
+/// Check whether an attribute exists on an element node (avoids String allocation).
+pub(crate) fn has_attr(handle: &Handle, name: &str) -> bool {
+    if let NodeData::Element { ref attrs, .. } = handle.data {
+        attrs.borrow().iter().any(|a| a.name.local.as_ref() == name)
     } else {
-        None
+        false
+    }
+}
+
+/// Check whether the element's tag name matches the given name.
+pub(crate) fn is_tag(handle: &Handle, expected: &str) -> bool {
+    if let NodeData::Element { ref name, .. } = handle.data {
+        name.local.as_ref() == expected
+    } else {
+        false
     }
 }
 
@@ -216,22 +233,6 @@ fn collapse_whitespace_preserving_newlines(s: &str) -> String {
     }
     // Trim leading/trailing newlines that are just whitespace artifacts.
     result
-}
-
-/// Remove leading and trailing Break nodes and whitespace-only Text nodes.
-/// Port of hast-util-to-mdast/lib/util/drop-surrounding-breaks.js
-fn drop_surrounding_breaks(mut nodes: Vec<mdast::Node>) -> Vec<mdast::Node> {
-    fn is_droppable_edge(n: &mdast::Node) -> bool {
-        matches!(n, mdast::Node::Break(_))
-            || matches!(n, mdast::Node::Text(t) if t.value.trim().is_empty())
-    }
-    while nodes.first().is_some_and(is_droppable_edge) {
-        nodes.remove(0);
-    }
-    while nodes.last().is_some_and(is_droppable_edge) {
-        nodes.pop();
-    }
-    nodes
 }
 
 /// Extract the text content from all descendants of an element (for <pre> blocks).
@@ -328,13 +329,58 @@ fn collect_text(handle: &Handle, result: &mut String) {
 fn is_block_element(tag: &str) -> bool {
     matches!(
         tag,
-        "address" | "article" | "aside" | "blockquote" | "body" | "caption" | "center"
-        | "col" | "colgroup" | "dd" | "details" | "dialog" | "dir" | "div" | "dl"
-        | "dt" | "fieldset" | "figcaption" | "figure" | "footer" | "form" | "h1" | "h2"
-        | "h3" | "h4" | "h5" | "h6" | "header" | "hgroup" | "hr" | "html" | "legend"
-        | "li" | "listing" | "main" | "menu" | "nav" | "ol" | "p" | "plaintext" | "pre"
-        | "section" | "summary" | "table" | "tbody" | "td" | "tfoot" | "th" | "thead"
-        | "tr" | "ul" | "xmp"
+        "address"
+            | "article"
+            | "aside"
+            | "blockquote"
+            | "body"
+            | "caption"
+            | "center"
+            | "col"
+            | "colgroup"
+            | "dd"
+            | "details"
+            | "dialog"
+            | "dir"
+            | "div"
+            | "dl"
+            | "dt"
+            | "fieldset"
+            | "figcaption"
+            | "figure"
+            | "footer"
+            | "form"
+            | "h1"
+            | "h2"
+            | "h3"
+            | "h4"
+            | "h5"
+            | "h6"
+            | "header"
+            | "hgroup"
+            | "hr"
+            | "html"
+            | "legend"
+            | "li"
+            | "listing"
+            | "main"
+            | "menu"
+            | "nav"
+            | "ol"
+            | "p"
+            | "plaintext"
+            | "pre"
+            | "section"
+            | "summary"
+            | "table"
+            | "tbody"
+            | "td"
+            | "tfoot"
+            | "th"
+            | "thead"
+            | "tr"
+            | "ul"
+            | "xmp"
     )
 }
 
@@ -429,7 +475,7 @@ fn handle_code_inline(state: &mut State, handle: &Handle) -> Vec<mdast::Node> {
 /// Port of hast-util-to-mdast/lib/handlers/code.js
 fn handle_code_block(state: &mut State, handle: &Handle) -> Vec<mdast::Node> {
     // Extract language from <code class="language-*"> child.
-    let lang = if tag_name(handle).as_deref() == Some("pre") {
+    let lang = if is_tag(handle, "pre") {
         find_code_language(handle)
     } else {
         None
@@ -452,8 +498,13 @@ fn handle_code_block(state: &mut State, handle: &Handle) -> Vec<mdast::Node> {
 
 /// Find the `language-*` class on a `<code>` child of `<pre>`.
 fn find_code_language(pre_handle: &Handle) -> Option<String> {
-    for child in pre_handle.children.borrow().clone().iter() {
-        if let NodeData::Element { ref name, ref attrs, .. } = child.data {
+    for child in pre_handle.children.borrow().iter() {
+        if let NodeData::Element {
+            ref name,
+            ref attrs,
+            ..
+        } = child.data
+        {
             if name.local.as_ref() == "code" {
                 for attr in attrs.borrow().iter() {
                     if attr.name.local.as_ref() == "class" {
@@ -502,7 +553,10 @@ fn handle_dl(state: &mut State, handle: &Handle) -> Vec<mdast::Node> {
     }
 
     let mut groups: Vec<Group> = Vec::new();
-    let mut current = Group { titles: Vec::new(), definitions: Vec::new() };
+    let mut current = Group {
+        titles: Vec::new(),
+        definitions: Vec::new(),
+    };
     let mut prev_was_dd = false;
 
     for child in &clean {
@@ -515,7 +569,10 @@ fn handle_dl(state: &mut State, handle: &Handle) -> Vec<mdast::Node> {
         if child_tag.as_deref() == Some("dt") {
             if prev_was_dd {
                 groups.push(current);
-                current = Group { titles: Vec::new(), definitions: Vec::new() };
+                current = Group {
+                    titles: Vec::new(),
+                    definitions: Vec::new(),
+                };
             }
             current.titles.push(child.clone());
             prev_was_dd = false;
@@ -659,7 +716,7 @@ fn handle_img(handle: &Handle) -> Vec<mdast::Node> {
 /// Port of hast-util-to-mdast/lib/handlers/input.js
 fn handle_input(state: &mut State, handle: &Handle) -> Vec<mdast::Node> {
     // disabled, hidden, file → skip
-    if get_attr(handle, "disabled").is_some() {
+    if has_attr(handle, "disabled") {
         return vec![];
     }
     let input_type = get_attr(handle, "type")
@@ -671,13 +728,15 @@ fn handle_input(state: &mut State, handle: &Handle) -> Vec<mdast::Node> {
 
     // checkbox / radio → checked symbol
     if input_type == "checkbox" || input_type == "radio" {
-        let checked = get_attr(handle, "checked").is_some();
+        let checked = has_attr(handle, "checked");
         let value = if checked {
             state.options.checked.as_deref().unwrap_or("[x]")
         } else {
             state.options.unchecked.as_deref().unwrap_or("[ ]")
         };
-        return vec![mdast::Node::Text(mdast::Text { value: value.to_string() })];
+        return vec![mdast::Node::Text(mdast::Text {
+            value: value.to_string(),
+        })];
     }
 
     // image type → Image node
@@ -714,9 +773,12 @@ fn handle_input(state: &mut State, handle: &Handle) -> Vec<mdast::Node> {
         if !no_list {
             if let Some(list_id) = get_attr(handle, "list") {
                 if let Some(datalist_handle) = state.element_by_id.get(&list_id).cloned() {
-                    let is_multiple = get_attr(handle, "multiple").is_some();
+                    let is_multiple = has_attr(handle, "multiple");
                     let size = get_attr(handle, "size").and_then(|s| s.parse::<usize>().ok());
-                    let props = ExplicitInputProps { multiple: is_multiple, size };
+                    let props = ExplicitInputProps {
+                        multiple: is_multiple,
+                        size,
+                    };
                     find_selected_options(&datalist_handle, Some(&props))
                 } else {
                     vec![]
@@ -735,7 +797,10 @@ fn handle_input(state: &mut State, handle: &Handle) -> Vec<mdast::Node> {
 
     // Passwords: obscure value.
     let options: Vec<(String, Option<String>)> = if input_type == "password" {
-        options.into_iter().map(|(v, l)| ("•".repeat(v.chars().count()), l)).collect()
+        options
+            .into_iter()
+            .map(|(v, l)| ("•".repeat(v.chars().count()), l))
+            .collect()
     } else {
         options
     };
@@ -756,7 +821,9 @@ fn handle_input(state: &mut State, handle: &Handle) -> Vec<mdast::Node> {
                 children: vec![mdast::Node::Text(mdast::Text { value: display })],
             }));
             if i + 1 < options.len() {
-                result_nodes.push(mdast::Node::Text(mdast::Text { value: ", ".to_string() }));
+                result_nodes.push(mdast::Node::Text(mdast::Text {
+                    value: ", ".to_string(),
+                }));
             }
         }
         return result_nodes;
@@ -807,47 +874,61 @@ enum CheckboxLocation {
 /// Detect a leading checkbox without consuming it, returning its checked state and location.
 /// Skips leading whitespace-only text nodes to find the first meaningful child.
 fn detect_leading_checkbox(handle: &Handle) -> (Option<bool>, CheckboxLocation) {
-    let children = handle.children.borrow().clone();
+    let children_ref = handle.children.borrow();
     // Skip leading whitespace-only text nodes.
-    let first = children.iter().find(|child| {
-        match &child.data {
-            NodeData::Text { ref contents } => !contents.borrow().trim().is_empty(),
-            _ => true,
-        }
-    }).cloned();
+    let first = children_ref.iter().find(|child| match &child.data {
+        NodeData::Text { ref contents } => !contents.borrow().trim().is_empty(),
+        _ => true,
+    });
 
     if let Some(first) = first {
-        if let NodeData::Element { ref name, ref attrs, .. } = first.data {
+        if let NodeData::Element {
+            ref name,
+            ref attrs,
+            ..
+        } = first.data
+        {
             let tag = name.local.as_ref();
-            let input_type = attrs.borrow().iter()
+            let input_type = attrs
+                .borrow()
+                .iter()
                 .find(|a| a.name.local.as_ref() == "type")
                 .map(|a| a.value.to_string().to_lowercase())
                 .unwrap_or_default();
 
             if tag == "input" && (input_type == "checkbox" || input_type == "radio") {
-                let checked = attrs.borrow().iter()
+                let checked = attrs
+                    .borrow()
+                    .iter()
                     .any(|a| a.name.local.as_ref() == "checked");
                 return (Some(checked), CheckboxLocation::Direct);
             }
 
             if tag == "p" {
                 // Also skip leading whitespace inside the p element.
-                let p_children = first.children.borrow().clone();
-                let p_first = p_children.iter().find(|c| {
-                    match &c.data {
-                        NodeData::Text { ref contents } => !contents.borrow().trim().is_empty(),
-                        _ => true,
-                    }
-                }).cloned();
+                let p_children_ref = first.children.borrow();
+                let p_first = p_children_ref.iter().find(|c| match &c.data {
+                    NodeData::Text { ref contents } => !contents.borrow().trim().is_empty(),
+                    _ => true,
+                });
                 if let Some(p_first_child) = p_first {
-                    if let NodeData::Element { ref name, ref attrs, .. } = p_first_child.data {
+                    if let NodeData::Element {
+                        ref name,
+                        ref attrs,
+                        ..
+                    } = p_first_child.data
+                    {
                         let p_tag = name.local.as_ref();
-                        let p_type = attrs.borrow().iter()
+                        let p_type = attrs
+                            .borrow()
+                            .iter()
                             .find(|a| a.name.local.as_ref() == "type")
                             .map(|a| a.value.to_string().to_lowercase())
                             .unwrap_or_default();
                         if p_tag == "input" && (p_type == "checkbox" || p_type == "radio") {
-                            let checked = attrs.borrow().iter()
+                            let checked = attrs
+                                .borrow()
+                                .iter()
                                 .any(|a| a.name.local.as_ref() == "checked");
                             return (Some(checked), CheckboxLocation::InsideFirstP);
                         }
@@ -865,18 +946,16 @@ fn all_except_leading_checkbox(
     handle: &Handle,
     checkbox_loc: CheckboxLocation,
 ) -> Vec<mdast::Node> {
-    let children: Vec<Handle> = handle.children.borrow().clone();
+    let children_ref = handle.children.borrow();
     let mut result = Vec::new();
 
     // Find the index of the first meaningful (non-whitespace) child.
-    let first_meaningful_idx = children.iter().position(|child| {
-        match &child.data {
-            NodeData::Text { ref contents } => !contents.borrow().trim().is_empty(),
-            _ => true,
-        }
+    let first_meaningful_idx = children_ref.iter().position(|child| match &child.data {
+        NodeData::Text { ref contents } => !contents.borrow().trim().is_empty(),
+        _ => true,
     });
 
-    for (i, child) in children.iter().enumerate() {
+    for (i, child) in children_ref.iter().enumerate() {
         let is_first_meaningful = Some(i) == first_meaningful_idx;
         match checkbox_loc {
             CheckboxLocation::Direct if is_first_meaningful => {
@@ -885,15 +964,13 @@ fn all_except_leading_checkbox(
             }
             CheckboxLocation::InsideFirstP if is_first_meaningful => {
                 // Process the first <p> but skip its first meaningful child (the checkbox).
-                let p_children: Vec<Handle> = child.children.borrow().clone();
-                let p_first_meaningful = p_children.iter().position(|c| {
-                    match &c.data {
-                        NodeData::Text { ref contents } => !contents.borrow().trim().is_empty(),
-                        _ => true,
-                    }
+                let p_children_ref = child.children.borrow();
+                let p_first_meaningful = p_children_ref.iter().position(|c| match &c.data {
+                    NodeData::Text { ref contents } => !contents.borrow().trim().is_empty(),
+                    _ => true,
                 });
                 let mut p_result = Vec::new();
-                for (j, p_child) in p_children.iter().enumerate() {
+                for (j, p_child) in p_children_ref.iter().enumerate() {
                     if Some(j) == p_first_meaningful {
                         continue; // skip checkbox
                     }
@@ -901,7 +978,9 @@ fn all_except_leading_checkbox(
                 }
                 let p_result = drop_surrounding_breaks(p_result);
                 if !p_result.is_empty() && !is_whitespace_only(&p_result) {
-                    result.push(mdast::Node::Paragraph(mdast::Paragraph { children: p_result }));
+                    result.push(mdast::Node::Paragraph(mdast::Paragraph {
+                        children: p_result,
+                    }));
                 }
             }
             _ => {
@@ -946,8 +1025,6 @@ fn spreadout(handle: &Handle) -> bool {
     }
     false
 }
-
-
 
 /// <ol>, <ul>, <dir> → List
 /// Port of hast-util-to-mdast/lib/handlers/list.js
@@ -1069,23 +1146,19 @@ fn handle_p(state: &mut State, handle: &Handle) -> Vec<mdast::Node> {
     vec![mdast::Node::Paragraph(mdast::Paragraph { children })]
 }
 
-/// Check if a list of nodes contains only whitespace-only text.
-fn is_whitespace_only(nodes: &[mdast::Node]) -> bool {
-    nodes.iter().all(|n| match n {
-        mdast::Node::Text(t) => t.value.trim().is_empty(),
-        _ => false,
-    })
-}
-
 /// <q> → Text with quotes wrapping children
 /// Port of hast-util-to-mdast/lib/handlers/q.js
 fn handle_q(state: &mut State, handle: &Handle) -> Vec<mdast::Node> {
     // Pick quote pair based on nesting depth (cycles through the quotes array).
     // Default is a single `"` character (both open and close).
-    let quotes = state.options.quotes.clone();
-    let default_quote = "\"".to_string();
+    let quotes = &state.options.quotes;
+    debug_assert!(
+        !quotes.is_empty(),
+        "quotes should always have at least one entry"
+    );
+    let fallback = "\"".to_string();
     let quote_str = if quotes.is_empty() {
-        &default_quote
+        &fallback
     } else {
         &quotes[state.q_nesting % quotes.len()]
     };
@@ -1101,14 +1174,21 @@ fn handle_q(state: &mut State, handle: &Handle) -> Vec<mdast::Node> {
     if let Some(mdast::Node::Text(t)) = contents.first_mut() {
         t.value.insert(0, open);
     } else {
-        contents.insert(0, mdast::Node::Text(mdast::Text { value: open.to_string() }));
+        contents.insert(
+            0,
+            mdast::Node::Text(mdast::Text {
+                value: open.to_string(),
+            }),
+        );
     }
 
     // Append close quote to last text node (or insert new text).
     if let Some(mdast::Node::Text(t)) = contents.last_mut() {
         t.value.push(close);
     } else {
-        contents.push(mdast::Node::Text(mdast::Text { value: close.to_string() }));
+        contents.push(mdast::Node::Text(mdast::Text {
+            value: close.to_string(),
+        }));
     }
 
     contents
@@ -1158,8 +1238,7 @@ pub(crate) fn find_selected_options(
     // This means positive `size` values are ignored (min with 0 → 0 → fallback).
     // Only negative sizes would be used, which is nonsensical for HTML, so
     // effectively: always use (multiple ? 4 : 1).
-    let is_multiple = explicit_props.is_some_and(|p| p.multiple)
-        || get_attr(handle, "multiple").is_some();
+    let is_multiple = explicit_props.is_some_and(|p| p.multiple) || has_attr(handle, "multiple");
     let size_attr: Option<isize> = explicit_props
         .and_then(|p| p.size.map(|s| s as isize))
         .or_else(|| get_attr(handle, "size").and_then(|s| s.parse::<isize>().ok()));
@@ -1169,7 +1248,11 @@ pub(crate) fn find_selected_options(
         (-capped) as usize
     } else {
         // 0 → use fallback
-        if is_multiple { 4 } else { 1 }
+        if is_multiple {
+            4
+        } else {
+            1
+        }
     };
 
     // Build result from the appropriate list (selected or all), limited to size.
@@ -1206,20 +1289,35 @@ struct OptionData {
 /// Collect all non-disabled option elements recursively.
 fn collect_options_data(handle: &Handle, results: &mut Vec<OptionData>) {
     for child in handle.children.borrow().iter() {
-        if let NodeData::Element { ref name, ref attrs, .. } = child.data {
+        if let NodeData::Element {
+            ref name,
+            ref attrs,
+            ..
+        } = child.data
+        {
             let tag = name.local.as_ref();
             if tag == "option" {
-                let is_disabled = attrs.borrow().iter().any(|a| a.name.local.as_ref() == "disabled");
+                let is_disabled = attrs
+                    .borrow()
+                    .iter()
+                    .any(|a| a.name.local.as_ref() == "disabled");
                 if is_disabled {
                     // Still recurse? Options don't have children in practice.
                     continue;
                 }
-                let is_selected = attrs.borrow().iter().any(|a| a.name.local.as_ref() == "selected");
-                let value_attr = attrs.borrow().iter()
+                let is_selected = attrs
+                    .borrow()
+                    .iter()
+                    .any(|a| a.name.local.as_ref() == "selected");
+                let value_attr = attrs
+                    .borrow()
+                    .iter()
                     .find(|a| a.name.local.as_ref() == "value")
                     .map(|a| a.value.to_string());
                 let text_content = collapse_whitespace(to_text(child).trim());
-                let label_attr = attrs.borrow().iter()
+                let label_attr = attrs
+                    .borrow()
+                    .iter()
                     .find(|a| a.name.local.as_ref() == "label")
                     .map(|a| a.value.to_string());
                 // JS: label = content || String(properties.label || '')
@@ -1231,8 +1329,14 @@ fn collect_options_data(handle: &Handle, results: &mut Vec<OptionData>) {
                 };
                 // JS: value = String(properties.value || '') || content
                 // Empty string value attr is treated as missing (falsy in JS).
-                let value = value_attr.filter(|s| !s.is_empty()).unwrap_or_else(|| text_content.clone());
-                results.push(OptionData { value, label, selected: is_selected });
+                let value = value_attr
+                    .filter(|s| !s.is_empty())
+                    .unwrap_or_else(|| text_content.clone());
+                results.push(OptionData {
+                    value,
+                    label,
+                    selected: is_selected,
+                });
             } else {
                 // Recurse into all elements (JS findOptions recurses into all children).
                 collect_options_data(child, results);
@@ -1271,7 +1375,10 @@ fn handle_table(state: &mut State, handle: &Handle) -> Vec<mdast::Node> {
 
     // Add an empty header row if headless.
     if headless {
-        rows.insert(0, mdast::Node::TableRow(mdast::TableRow { children: vec![] }));
+        rows.insert(
+            0,
+            mdast::Node::TableRow(mdast::TableRow { children: vec![] }),
+        );
     }
 
     // Ensure all row children are TableCells.
@@ -1296,31 +1403,43 @@ fn handle_table(state: &mut State, handle: &Handle) -> Vec<mdast::Node> {
 
         // Process colspan/rowspan for each cell.
         let cells: Vec<(usize, u32, u32)> = {
-            let tr = if let mdast::Node::TableRow(tr) = &rows[row_index] { tr } else { continue };
-            tr.children.iter().enumerate().filter_map(|(cell_index, cell)| {
-                if let mdast::Node::TableCell(tc) = cell {
-                    let colspan = tc.colspan.unwrap_or(1);
-                    let rowspan = tc.rowspan.unwrap_or(1);
-                    if colspan > 1 || rowspan > 1 {
-                        Some((cell_index, colspan, rowspan))
+            let tr = if let mdast::Node::TableRow(tr) = &rows[row_index] {
+                tr
+            } else {
+                continue;
+            };
+            tr.children
+                .iter()
+                .enumerate()
+                .filter_map(|(cell_index, cell)| {
+                    if let mdast::Node::TableCell(tc) = cell {
+                        let colspan = tc.colspan.unwrap_or(1);
+                        let rowspan = tc.rowspan.unwrap_or(1);
+                        if colspan > 1 || rowspan > 1 {
+                            Some((cell_index, colspan, rowspan))
+                        } else {
+                            None
+                        }
                     } else {
                         None
                     }
-                } else {
-                    None
-                }
-            }).collect()
+                })
+                .collect()
         };
 
         for (cell_index, colspan, rowspan) in cells {
             let end_row = (row_index + rowspan as usize).min(row_count);
             for (span_offset, row) in rows[row_index..end_row].iter_mut().enumerate() {
                 let other_row_index = row_index + span_offset;
-                let col_start = if other_row_index == row_index { cell_index + 1 } else { cell_index };
+                let col_start = if other_row_index == row_index {
+                    cell_index + 1
+                } else {
+                    cell_index
+                };
                 let col_end = cell_index + colspan as usize;
                 if col_start < col_end {
                     let empty_cells: Vec<mdast::Node> = (col_start..col_end)
-                        .map(|_| mdast::Node::TableCell(mdast::TableCell { children: vec![], colspan: None, rowspan: None }))
+                        .map(|_| mdast::Node::TableCell(mdast::TableCell::new(vec![])))
                         .collect();
                     if let mdast::Node::TableRow(tr) = row {
                         let insert_at = col_start.min(tr.children.len());
@@ -1346,11 +1465,8 @@ fn handle_table(state: &mut State, handle: &Handle) -> Vec<mdast::Node> {
     for row in &mut rows {
         if let mdast::Node::TableRow(tr) = row {
             while tr.children.len() < columns {
-                tr.children.push(mdast::Node::TableCell(mdast::TableCell {
-                    children: vec![],
-                    colspan: None,
-                    rowspan: None,
-                }));
+                tr.children
+                    .push(mdast::Node::TableCell(mdast::TableCell::new(vec![])));
             }
         }
     }
@@ -1374,7 +1490,10 @@ fn handle_table(state: &mut State, handle: &Handle) -> Vec<mdast::Node> {
 
     state.in_table = false;
 
-    vec![mdast::Node::Table(mdast::Table { align, children: rows })]
+    vec![mdast::Node::Table(mdast::Table {
+        align,
+        children: rows,
+    })]
 }
 
 /// Inspect a <table> element to determine alignment and whether it has a header.
@@ -1385,7 +1504,14 @@ fn inspect_table(handle: &Handle) -> (Vec<Option<mdast::AlignKind>>, bool) {
     let mut row_index = 0usize;
     let mut cell_index = 0usize;
 
-    inspect_table_node(handle, handle, &mut align, &mut headless, &mut row_index, &mut cell_index);
+    inspect_table_node(
+        handle,
+        handle,
+        &mut align,
+        &mut headless,
+        &mut row_index,
+        &mut cell_index,
+    );
     (align, headless)
 }
 
@@ -1397,8 +1523,13 @@ fn inspect_table_node(
     row_index: &mut usize,
     cell_index: &mut usize,
 ) {
-    for child in handle.children.borrow().clone().iter() {
-        if let NodeData::Element { ref name, ref attrs, .. } = child.data {
+    for child in handle.children.borrow().iter() {
+        if let NodeData::Element {
+            ref name,
+            ref attrs,
+            ..
+        } = child.data
+        {
             let tag = name.local.as_ref();
 
             // Don't enter nested tables.
@@ -1415,7 +1546,9 @@ fn inspect_table_node(
                     align.resize(*cell_index + 1, None);
                 }
                 if align[*cell_index].is_none() {
-                    let align_val = attrs.borrow().iter()
+                    let align_val = attrs
+                        .borrow()
+                        .iter()
                         .find(|a| a.name.local.as_ref() == "align")
                         .map(|a| a.value.to_string());
                     align[*cell_index] = match align_val.as_deref() {
@@ -1457,7 +1590,11 @@ fn handle_table_cell(state: &mut State, handle: &Handle) -> Vec<mdast::Node> {
         .and_then(|s| s.parse::<u32>().ok())
         .filter(|&n| n > 1);
 
-    vec![mdast::Node::TableCell(mdast::TableCell { children, colspan, rowspan })]
+    vec![mdast::Node::TableCell(mdast::TableCell {
+        children,
+        colspan,
+        rowspan,
+    })]
 }
 
 /// <tr> → TableRow
@@ -1484,7 +1621,9 @@ fn handle_textarea(state: &mut State, handle: &Handle) -> Vec<mdast::Node> {
 /// <wbr> → Text (zero-width space)
 /// Port of hast-util-to-mdast/lib/handlers/wbr.js
 fn handle_wbr() -> Vec<mdast::Node> {
-    vec![mdast::Node::Text(mdast::Text { value: "\u{200B}".to_string() })]
+    vec![mdast::Node::Text(mdast::Text {
+        value: "\u{200B}".to_string(),
+    })]
 }
 
 /// <noscript> — html5ever parses its content as raw text when scripting is enabled.
@@ -1652,11 +1791,7 @@ fn to_specific_table_cells(nodes: Vec<mdast::Node>) -> Vec<mdast::Node> {
                 tc.children.extend(queue);
             }
         } else {
-            results.push(mdast::Node::TableCell(mdast::TableCell {
-                children: queue,
-                colspan: None,
-                rowspan: None,
-            }));
+            results.push(mdast::Node::TableCell(mdast::TableCell::new(queue)));
         }
     }
 

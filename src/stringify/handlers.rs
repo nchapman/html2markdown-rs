@@ -66,13 +66,12 @@ fn handle_heading(state: &mut State, node: &mdast::Heading) -> String {
 
     if use_setext {
         let marker = if node.depth == 1 { '=' } else { '-' };
-        let line_len = content.lines().last().map_or(content.chars().count(), |l| l.chars().count());
+        let line_len = content
+            .lines()
+            .last()
+            .map_or(content.chars().count(), |l| l.chars().count());
         let underline_len = line_len.max(3);
-        return format!(
-            "{}\n{}",
-            content,
-            marker.to_string().repeat(underline_len)
-        );
+        return format!("{}\n{}", content, marker.to_string().repeat(underline_len));
     }
 
     // ATX heading: replace hard breaks first, then bare newlines.
@@ -119,12 +118,14 @@ fn escape_atx_trailing_hashes(content: String) -> String {
 fn handle_thematic_break(state: &mut State) -> String {
     let marker = state.options.rule;
     let count = state.options.rule_repetition as usize;
-    if state.options.rule_spaces {
-        let parts: Vec<String> = std::iter::repeat(marker.to_string()).take(count).collect();
-        parts.join(" ")
-    } else {
-        std::iter::repeat(marker).take(count).collect()
+    let mut s = String::with_capacity(count * 2);
+    for i in 0..count {
+        if state.options.rule_spaces && i > 0 {
+            s.push(' ');
+        }
+        s.push(marker);
     }
+    s
 }
 
 fn handle_blockquote(state: &mut State, node: &mdast::Blockquote) -> String {
@@ -157,14 +158,22 @@ fn handle_list(state: &mut State, node: &mdast::List) -> String {
     let ordered_delimiter = if node.ordered {
         let pref = state.options.bullet_ordered;
         if state.ordered_bullet_last_used.is_some() {
-            if pref == '.' { ')' } else { '.' }
+            if pref == '.' {
+                ')'
+            } else {
+                '.'
+            }
         } else {
             pref
         }
     } else {
         // Alternate unordered bullets.
         let bullet = if state.bullet_last_used == Some(state.options.bullet) {
-            if state.options.bullet == '*' { '-' } else { '*' }
+            if state.options.bullet == '*' {
+                '-'
+            } else {
+                '*'
+            }
         } else {
             state.options.bullet
         };
@@ -235,7 +244,12 @@ fn handle_list(state: &mut State, node: &mdast::List) -> String {
 
 /// Render a list item, respecting whether the parent list is spread.
 fn handle_list_item_with_parent(state: &mut State, node: &Node, parent: &mdast::List) -> String {
-    let spread = parent.spread || if let Node::ListItem(li) = node { li.spread } else { false };
+    let spread = parent.spread
+        || if let Node::ListItem(li) = node {
+            li.spread
+        } else {
+            false
+        };
 
     let content = if let Node::ListItem(li) = node {
         let mut content = super::flow::container_flow_tight(state, &li.children, spread);
@@ -355,12 +369,14 @@ fn handle_emphasis(state: &mut State, node: &mdast::Emphasis) -> String {
     // Switch to the alternate delimiter to get `*_foo_*` / `_*foo*_`.
     // We do NOT switch for double-marker content like `**bar**` (strong),
     // because `***bar***` is correctly parsed as `<em><strong>…</strong></em>`.
-    let starts_single = content.starts_with(marker)
-        && content.chars().nth(1) != Some(marker);
-    let ends_single = content.ends_with(marker)
-        && content.chars().rev().nth(1) != Some(marker);
+    let starts_single = content.starts_with(marker) && content.chars().nth(1) != Some(marker);
+    let ends_single = content.ends_with(marker) && content.chars().rev().nth(1) != Some(marker);
     let actual_marker = if starts_single || ends_single {
-        if marker == '*' { '_' } else { '*' }
+        if marker == '*' {
+            '_'
+        } else {
+            '*'
+        }
     } else {
         marker
     };
@@ -380,7 +396,9 @@ fn handle_inline_code(node: &mdast::InlineCode) -> String {
 
     let needs_space = node.value.starts_with('`')
         || node.value.ends_with('`')
-        || (node.value.starts_with(' ') && node.value.ends_with(' ') && !node.value.trim().is_empty());
+        || (node.value.starts_with(' ')
+            && node.value.ends_with(' ')
+            && !node.value.trim().is_empty());
 
     if needs_space {
         format!("{} {} {}", ticks, node.value, ticks)
@@ -411,7 +429,10 @@ fn handle_link(state: &mut State, node: &mdast::Link) -> String {
         && matches!(&node.children[0], mdast::Node::Text(_))
         && (content == node.url.as_str() || format!("mailto:{}", content) == node.url)
         && node.url.contains(':')
-        && !node.url.chars().any(|c| c <= ' ' || c == '<' || c == '>' || c == '\x7f')
+        && !node
+            .url
+            .chars()
+            .any(|c| c <= ' ' || c == '<' || c == '>' || c == '\x7f')
     {
         return format!("<{}>", content);
     }
@@ -580,7 +601,12 @@ fn handle_table(state: &mut State, node: &mdast::Table) -> String {
     lines.join("\n")
 }
 
-fn format_row(cells: &[String], widths: &[usize], col_count: usize, aligns: &[Option<crate::mdast::AlignKind>]) -> String {
+fn format_row(
+    cells: &[String],
+    widths: &[usize],
+    col_count: usize,
+    aligns: &[Option<crate::mdast::AlignKind>],
+) -> String {
     let padded: Vec<String> = (0..col_count)
         .map(|i| {
             let content = cells.get(i).map(|s| s.as_str()).unwrap_or("");
@@ -604,7 +630,12 @@ fn pad_cell(content: &str, width: usize, align: Option<crate::mdast::AlignKind>)
             // JS uses ceiling division for left pad.
             let left_pad = padding.div_ceil(2);
             let right_pad = padding / 2;
-            format!("{}{}{}", " ".repeat(left_pad), content, " ".repeat(right_pad))
+            format!(
+                "{}{}{}",
+                " ".repeat(left_pad),
+                content,
+                " ".repeat(right_pad)
+            )
         }
         _ => {
             // Left-align (default): pad right

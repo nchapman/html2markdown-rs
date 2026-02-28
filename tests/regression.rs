@@ -7,7 +7,7 @@ use pretty_assertions::assert_eq;
 /// close in the `![alt](url)` syntax.
 #[test]
 fn image_alt_with_bracket() {
-    let md = html_to_markdown::convert(r#"<img src="foo.png" alt="a]b">"#).unwrap();
+    let md = html_to_markdown::convert(r#"<img src="foo.png" alt="a]b">"#);
     assert_eq!(md, "![a\\]b](foo.png)\n");
 }
 
@@ -20,15 +20,18 @@ fn image_alt_with_bracket() {
 #[test]
 fn definition_label_escaping_documented() {
     // Smoke test: a link whose text contains `]` should be escaped.
-    let md = html_to_markdown::convert(r#"<a href="http://example.com">foo]bar</a>"#).unwrap();
-    assert!(md.contains("foo\\]bar"), "link text ] should be escaped: {md:?}");
+    let md = html_to_markdown::convert(r#"<a href="http://example.com">foo]bar</a>"#);
+    assert!(
+        md.contains("foo\\]bar"),
+        "link text ] should be escaped: {md:?}"
+    );
 }
 
 /// Image alt text containing `*` must be escaped to prevent accidental
 /// emphasis in the `![alt](url)` syntax context.
 #[test]
 fn image_alt_with_asterisk() {
-    let md = html_to_markdown::convert(r#"<img src="foo.png" alt="a*b">"#).unwrap();
+    let md = html_to_markdown::convert(r#"<img src="foo.png" alt="a*b">"#);
     assert_eq!(md, "![a\\*b](foo.png)\n");
 }
 
@@ -36,7 +39,7 @@ fn image_alt_with_asterisk() {
 /// Only the first `~` of each `~~` pair is escaped (consistent with JS reference).
 #[test]
 fn double_tilde_escape_in_phrasing() {
-    let md = html_to_markdown::convert("<p>foo ~~bar~~ baz</p>").unwrap();
+    let md = html_to_markdown::convert("<p>foo ~~bar~~ baz</p>");
     // First `~` of each `~~` pair is escaped; single `~` is left alone.
     assert_eq!(md, "foo \\~~bar\\~~ baz\n");
 }
@@ -44,6 +47,6 @@ fn double_tilde_escape_in_phrasing() {
 /// A single tilde should NOT be escaped (it's not strikethrough syntax alone).
 #[test]
 fn single_tilde_not_escaped() {
-    let md = html_to_markdown::convert("<p>~/.bashrc</p>").unwrap();
+    let md = html_to_markdown::convert("<p>~/.bashrc</p>");
     assert_eq!(md, "~/.bashrc\n");
 }

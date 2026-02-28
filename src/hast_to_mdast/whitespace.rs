@@ -64,8 +64,8 @@ fn normalize_inline_boundaries(children: &mut Vec<Node>) {
         }
 
         // Does the following sibling start with whitespace?
-        let following_starts_with_space = i + 1 < n
-            && matches!(&children[i + 1], Node::Text(t) if t.value.starts_with(' '));
+        let following_starts_with_space =
+            i + 1 < n && matches!(&children[i + 1], Node::Text(t) if t.value.starts_with(' '));
 
         // Does this inline element's last text end with whitespace?
         let self_ends_with_space = inline_last_text_ends_with_space(&children[i]);
@@ -161,10 +161,16 @@ fn merge_adjacent_text(children: &mut Vec<Node>) {
 /// in the text of the preceding paragraph).
 fn trim_container(children: &mut [Node]) {
     if let Some(Node::Text(ref mut first)) = children.first_mut() {
-        first.value = first.value.trim_start_matches([' ', '\t', '\n', '\r']).to_string();
+        first.value = first
+            .value
+            .trim_start_matches([' ', '\t', '\n', '\r'])
+            .to_string();
     }
     if let Some(Node::Text(ref mut last)) = children.last_mut() {
-        last.value = last.value.trim_end_matches([' ', '\t', '\n', '\r']).to_string();
+        last.value = last
+            .value
+            .trim_end_matches([' ', '\t', '\n', '\r'])
+            .to_string();
     }
 }
 

@@ -28,8 +28,7 @@ struct SpecExample {
 static SPEC: LazyLock<Vec<SpecExample>> = LazyLock::new(parse_spec);
 
 fn parse_spec() -> Vec<SpecExample> {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../refs/commonmark-spec/spec.txt");
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../refs/commonmark-spec/spec.txt");
     let content = std::fs::read_to_string(&path)
         .expect("CommonMark spec not found at refs/commonmark-spec/spec.txt");
 
@@ -80,7 +79,11 @@ fn parse_spec() -> Vec<SpecExample> {
             };
 
             number += 1;
-            examples.push(SpecExample { number, section: section.clone(), html });
+            examples.push(SpecExample {
+                number,
+                section: section.clone(),
+                html,
+            });
         }
     }
 
@@ -295,7 +298,11 @@ fn process_tag(tag: &str, st: &mut NormState) {
     st.last_tag = name;
     // Self-closing tags behave like end tags for the whitespace state machine
     // (mirrors Python's handle_startendtag which sets self.last = "endtag").
-    st.last = if self_closing { Last::EndTag } else { Last::StartTag };
+    st.last = if self_closing {
+        Last::EndTag
+    } else {
+        Last::StartTag
+    };
 }
 
 fn process_data(data: &str, st: &mut NormState) {
@@ -382,7 +389,7 @@ fn try_decode_entity(s: &str) -> Option<(String, usize)> {
         return None;
     }
     let rest = &s[1..]; // bytes after '&'
-    // Find ';' within the first 15 bytes (all valid entity names are short ASCII).
+                        // Find ';' within the first 15 bytes (all valid entity names are short ASCII).
     let semi_in_rest = rest.bytes().take(15).position(|b| b == b';')?;
     let inner = &rest[..semi_in_rest]; // the entity name / numeric ref (ASCII-only)
 
@@ -462,10 +469,7 @@ fn parse_attrs(s: &str) -> Vec<(String, Option<String>)> {
 
         // Attribute name: up to `=`, whitespace, or `>` (shouldn't see `>` here).
         let name_start = pos;
-        while pos < bytes.len()
-            && bytes[pos] != b'='
-            && !bytes[pos].is_ascii_whitespace()
-        {
+        while pos < bytes.len() && bytes[pos] != b'=' && !bytes[pos].is_ascii_whitespace() {
             pos += 1;
         }
         let name = s[name_start..pos].to_lowercase();
@@ -638,18 +642,15 @@ const IGNORED_EXAMPLES: &[u32] = &[
     61,
     // HTML blocks: html5ever restructures DOM; our Markdown representation
     // of the restructured DOM produces different HTML when re-parsed.
-    148, 149, 150, 151, 152, 153, 154, 155, 159, 160, 161, 162, 163, 164,
-    165, 166, 167, 168, 170, 171, 173, 176, 177, 179, 180, 182, 186, 187,
-    188, 189, 190, 191, 192, 193,
+    148, 149, 150, 151, 152, 153, 154, 155, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 170,
+    171, 173, 176, 177, 179, 180, 182, 186, 187, 188, 189, 190, 191, 192, 193,
     // Unknown element `<bar>`: html5ever preserves it in serialization;
     // our converter drops it (treats unknown elements as transparent).
     203,
     // Backtick in href + unclosed `<a>`: html5ever produces duplicate link
     // nodes; pulldown-cmark percent-encodes `` ` `` as `%60`; double mismatch.
-    346,
-    // pulldown-cmark always emits alt="" on images; spec HTML has no alt attr.
-    477,
-    // `**` / `__` in href + unclosed `<a>`: same duplicate-link + URL issue.
+    346, // pulldown-cmark always emits alt="" on images; spec HTML has no alt attr.
+    477, // `**` / `__` in href + unclosed `<a>`: same duplicate-link + URL issue.
     478, 479,
     // Newline inside href: html5ever drops it; can't reconstruct a valid
     // Markdown angle-bracket URL destination with a literal newline.
@@ -687,9 +688,7 @@ fn is_ignored(n: u32) -> bool {
 /// normalize(spec HTML). Returns `Ok(())` on match, `Err(message)` on mismatch.
 fn test_example(ex: &SpecExample) -> Result<(), String> {
     // Step 1: convert the spec HTML to Markdown.
-    let markdown = html_to_markdown::convert(&ex.html).map_err(|e| {
-        format!("convert() error: {e}")
-    })?;
+    let markdown = html_to_markdown::convert(&ex.html);
 
     // Step 2: render the Markdown back to HTML with pulldown-cmark.
     // Enable GFM extensions in case our converter produced table/strikethrough

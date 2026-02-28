@@ -8,16 +8,16 @@
 // Throughput is reported in bytes/sec so results are comparable across fixture sizes.
 
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use html_to_markdown::{html_to_mdast, mdast_to_string, convert, Options, StringifyOptions};
 use html2md::parse_html;
+use html_to_markdown::{convert, html_to_mdast, mdast_to_string, Options, StringifyOptions};
 
 fn load_fixtures() -> Vec<(&'static str, &'static str)> {
     vec![
         ("article", include_str!("fixtures/article.html")),
-        ("table",   include_str!("fixtures/table.html")),
-        ("lists",   include_str!("fixtures/lists.html")),
-        ("code",    include_str!("fixtures/code.html")),
-        ("large",   include_str!("fixtures/large.html")),
+        ("table", include_str!("fixtures/table.html")),
+        ("lists", include_str!("fixtures/lists.html")),
+        ("code", include_str!("fixtures/code.html")),
+        ("large", include_str!("fixtures/large.html")),
     ]
 }
 
@@ -28,7 +28,7 @@ fn bench_full_pipeline(c: &mut Criterion) {
     for (name, html) in &fixtures {
         group.throughput(Throughput::Bytes(html.len() as u64));
         group.bench_with_input(BenchmarkId::new("convert", name), html, |b, html| {
-            b.iter(|| convert(black_box(html)).unwrap())
+            b.iter(|| convert(black_box(html)))
         });
     }
 
@@ -43,7 +43,7 @@ fn bench_transformer(c: &mut Criterion) {
     for (name, html) in &fixtures {
         group.throughput(Throughput::Bytes(html.len() as u64));
         group.bench_with_input(BenchmarkId::new("html_to_mdast", name), html, |b, html| {
-            b.iter(|| html_to_mdast(black_box(html), &options).unwrap())
+            b.iter(|| html_to_mdast(black_box(html), &options))
         });
     }
 
@@ -57,7 +57,7 @@ fn bench_serializer(c: &mut Criterion) {
     // Pre-build MDAST trees outside the hot loop. Store input byte length for throughput.
     let trees: Vec<(&str, u64, _)> = fixtures
         .iter()
-        .map(|(name, html)| (*name, html.len() as u64, html_to_mdast(html, &options).unwrap()))
+        .map(|(name, html)| (*name, html.len() as u64, html_to_mdast(html, &options)))
         .collect();
 
     let stringify_options = StringifyOptions::default();
@@ -65,9 +65,11 @@ fn bench_serializer(c: &mut Criterion) {
 
     for (name, byte_len, tree) in &trees {
         group.throughput(Throughput::Bytes(*byte_len));
-        group.bench_with_input(BenchmarkId::new("mdast_to_string", name), tree, |b, tree| {
-            b.iter(|| black_box(mdast_to_string(tree, &stringify_options)))
-        });
+        group.bench_with_input(
+            BenchmarkId::new("mdast_to_string", name),
+            tree,
+            |b, tree| b.iter(|| black_box(mdast_to_string(tree, &stringify_options))),
+        );
     }
 
     group.finish();
@@ -90,5 +92,11 @@ fn bench_html2md(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, bench_full_pipeline, bench_transformer, bench_serializer, bench_html2md);
+criterion_group!(
+    benches,
+    bench_full_pipeline,
+    bench_transformer,
+    bench_serializer,
+    bench_html2md
+);
 criterion_main!(benches);

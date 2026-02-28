@@ -5,6 +5,7 @@
 // are wrapped in implicit Paragraph nodes. Straddling elements (links, deletes
 // containing block content) are split.
 
+use super::util::{drop_surrounding_breaks, is_whitespace_only};
 use crate::mdast::{self, Node};
 
 /// Wrap mixed content: phrasing runs become paragraphs, block content passes through.
@@ -142,35 +143,15 @@ fn wrap_parent_inside_child(parent: &Node, child: Node) -> Node {
                 depth: h.depth,
                 children: vec![inner],
             }),
-            Node::Paragraph(_) => Node::Paragraph(mdast::Paragraph { children: vec![inner] }),
-            Node::Blockquote(_) => Node::Blockquote(mdast::Blockquote { children: vec![inner] }),
+            Node::Paragraph(_) => Node::Paragraph(mdast::Paragraph {
+                children: vec![inner],
+            }),
+            Node::Blockquote(_) => Node::Blockquote(mdast::Blockquote {
+                children: vec![inner],
+            }),
             other => other,
         }
     } else {
         child
     }
-}
-
-/// Remove leading and trailing Break nodes and whitespace-only Text nodes.
-/// Port of hast-util-to-mdast/lib/util/drop-surrounding-breaks.js
-fn drop_surrounding_breaks(mut nodes: Vec<Node>) -> Vec<Node> {
-    fn is_droppable_edge(n: &Node) -> bool {
-        matches!(n, Node::Break(_))
-            || matches!(n, Node::Text(t) if t.value.trim().is_empty())
-    }
-    while nodes.first().is_some_and(is_droppable_edge) {
-        nodes.remove(0);
-    }
-    while nodes.last().is_some_and(is_droppable_edge) {
-        nodes.pop();
-    }
-    nodes
-}
-
-/// Check if a list of nodes contains only whitespace text.
-fn is_whitespace_only(nodes: &[Node]) -> bool {
-    nodes.iter().all(|node| match node {
-        Node::Text(t) => t.value.trim().is_empty(),
-        _ => false,
-    })
 }
