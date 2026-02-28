@@ -71,6 +71,41 @@ formatting, and the serializer knows nothing about HTML.
 html2markdown = { version = "0.2", features = ["tracing"] }
 ```
 
+## Language bindings
+
+Python, Swift, and Kotlin bindings are available via [UniFFI](https://mozilla.github.io/uniffi-rs/).
+
+```sh
+make test-bindings   # run all binding test suites
+make test-python     # Python only (pytest)
+make test-swift      # Swift only (XCTest)
+make test-kotlin     # Kotlin only (JUnit 5)
+```
+
+### Python
+
+```python
+from html2markdown_uniffi import convert, convert_with, default_options
+
+md = convert("<h1>Hello</h1>")
+```
+
+### Swift
+
+```swift
+import Html2Markdown
+
+let md = convert(html: "<h1>Hello</h1>")
+```
+
+### Kotlin
+
+```kotlin
+import uniffi.html2markdown_uniffi.*
+
+val md = convert("<h1>Hello</h1>")
+```
+
 ## Benchmarks
 
 Throughput comparison (MiB/s, higher is better):
