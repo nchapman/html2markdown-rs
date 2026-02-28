@@ -1,3 +1,7 @@
 /target
 node_modules/
 package-lock.json
+.venv*/
+tests/bindings/swift/.build/
+tests/bindings/kotlin/.gradle/
+tests/bindings/kotlin/build/

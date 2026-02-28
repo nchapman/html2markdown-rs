@@ -1,0 +1,3 @@
+.build/
+Sources/html2markdown_uniffiFFI/html2markdown_uniffiFFI.h
+Sources/Html2Markdown/html2markdown_uniffi.swift

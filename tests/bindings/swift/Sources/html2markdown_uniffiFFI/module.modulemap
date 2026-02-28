@@ -1,7 +1,5 @@
 module html2markdown_uniffiFFI {
     header "html2markdown_uniffiFFI.h"
+    link "html2markdown_uniffi"
     export *
-    use "Darwin"
-    use "_Builtin_stdbool"
-    use "_Builtin_stdint"
 }

@@ -1,0 +1,10 @@
+[bindings.python]
+cdylib_name = "html2markdown_uniffi"
+
+[bindings.kotlin]
+cdylib_name = "html2markdown_uniffi"
+package_name = "html2markdown"
+
+[bindings.swift]
+cdylib_name = "html2markdown_uniffi"
+module_name = "Html2Markdown"
