@@ -16,6 +16,12 @@ endif
 CDYLIB  := $(RELEASE_DIR)/libhtml2markdown_uniffi.$(CDYLIB_EXT)
 STATICLIB := $(RELEASE_DIR)/libhtml2markdown_uniffi.$(STATICLIB_EXT)
 
+# --- Prerequisite checks ---
+
+define require
+  $(if $(shell which $(1) 2>/dev/null),,$(error "$(1)" not found — install it first))
+endef
+
 # --- Cargo build ---
 
 .PHONY: cargo-build
@@ -44,6 +50,7 @@ PYTHON := $(VENV)/bin/python
 PIP := $(VENV)/bin/pip
 
 $(VENV):
+	$(call require,python3)
 	python3 -m venv $(VENV)
 	$(PIP) install --upgrade pip
 
@@ -53,6 +60,7 @@ setup-python: $(VENV)
 
 .PHONY: build-python
 build-python: $(VENV)
+	$(call require,python3)
 	$(VENV)/bin/maturin develop --manifest-path $(UNIFFI_DIR)/Cargo.toml --release
 
 .PHONY: test-python
@@ -70,6 +78,7 @@ SWIFT_SRC_DIR  := $(SWIFT_TEST_DIR)/Sources/html2markdown_uniffiFFI
 
 .PHONY: build-swift
 build-swift: $(GENERATED_DIR)/swift cargo-build
+	$(call require,swift)
 	cp $(GENERATED_DIR)/swift/html2markdown_uniffiFFI.h $(SWIFT_SRC_DIR)/
 	mkdir -p $(SWIFT_TEST_DIR)/Sources/Html2Markdown
 	cp $(GENERATED_DIR)/swift/html2markdown_uniffi.swift \
@@ -89,6 +98,7 @@ KOTLIN_GEN_DIR  := $(KOTLIN_TEST_DIR)/src/main/kotlin
 
 .PHONY: build-kotlin
 build-kotlin: $(GENERATED_DIR)/kotlin cargo-build
+	$(call require,java)
 	mkdir -p $(KOTLIN_GEN_DIR)
 	cp -r $(GENERATED_DIR)/kotlin/uniffi $(KOTLIN_GEN_DIR)/
 
