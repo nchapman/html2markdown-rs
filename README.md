@@ -77,6 +77,27 @@ formatting, and the serializer knows nothing about HTML.
 html2markdown = { version = "0.1", features = ["tracing"] }
 ```
 
+## Benchmarks
+
+Throughput comparison (MiB/s, higher is better):
+
+| Fixture | Rust | html2md (Rust) | Go | hast (JS) | turndown (JS) |
+|---------|-----:|---------------:|---:|----------:|--------------:|
+| article | 68.5 | 58.3 | 29.3 | 4.1 | 15.8 |
+| table | 21.1 | 17.9 | 21.7 | 1.8 | ERR |
+| lists | 19.8 | 21.3 | 18.0 | 1.7 | 4.6 |
+| code | 62.4 | 55.7 | 43.2 | 5.2 | 15.2 |
+| large | 48.7 | 43.3 | 28.8 | 3.1 | ERR |
+
+Measured on Apple M4 Max, Rust 1.93, Go 1.25, Node 22, macOS 15.7.
+
+Reproduce:
+
+```sh
+cargo bench                  # Criterion benchmarks
+./benches/compare.sh         # full cross-language comparison table
+```
+
 ## License
 
 MIT
