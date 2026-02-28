@@ -54,8 +54,7 @@ fn single_tilde_not_escaped() {
 /// Pipe characters in table cells must be escaped to prevent breaking table structure.
 #[test]
 fn pipe_in_table_cell_escaped() {
-    let md =
-        html2markdown::convert("<table><tr><th>Header</th></tr><tr><td>a|b</td></tr></table>");
+    let md = html2markdown::convert("<table><tr><th>Header</th></tr><tr><td>a|b</td></tr></table>");
     assert!(
         md.contains("a\\|b"),
         "pipe in table cell should be escaped: {md:?}"
@@ -252,10 +251,7 @@ fn list_item_indent_mixed_spread() {
     use html2markdown::{convert_with, ListItemIndent, Options};
     let options = Options::new().with_list_item_indent(ListItemIndent::Mixed);
     // A spread list item (paragraph + paragraph) → tab indent
-    let md = convert_with(
-        "<ul><li><p>first</p><p>second</p></li></ul>",
-        &options,
-    );
+    let md = convert_with("<ul><li><p>first</p><p>second</p></li></ul>", &options);
     assert!(
         md.starts_with("*   first"),
         "spread item should use tab indent: {md:?}"

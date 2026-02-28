@@ -170,9 +170,7 @@ pub(crate) fn escape_at_break_start(mut content: String) -> String {
         // `~` → when followed by `~`
         b'~' => second == Some(b'~'),
         // `<` → when followed by `!`, `/`, `?`, or a letter (triggers HTML/autolink)
-        b'<' => second.is_some_and(|c| {
-            matches!(c, b'!' | b'/' | b'?') || c.is_ascii_alphabetic()
-        }),
+        b'<' => second.is_some_and(|c| matches!(c, b'!' | b'/' | b'?') || c.is_ascii_alphabetic()),
         _ => false,
     };
 
