@@ -29,13 +29,7 @@ assert_eq!(md, "# Hello\n\nWorld");
 ```rust
 use html2markdown::{convert_with, Options, HeadingStyle};
 
-let opts = Options {
-    stringify: html2markdown::StringifyOptions {
-        heading_style: HeadingStyle::Setext,
-        ..Default::default()
-    },
-    ..Default::default()
-};
+let opts = Options::new().with_heading_style(HeadingStyle::Setext);
 
 let md = convert_with("<h1>Hello</h1><p>World</p>", &opts);
 assert_eq!(md, "Hello\n=====\n\nWorld");

@@ -4,6 +4,21 @@
 // Each node is a variant of the `Node` enum. Parent nodes own their children.
 // Leaf nodes hold a `value: String`.
 
+//! Markdown Abstract Syntax Tree (MDAST) node types.
+//!
+//! This module defines the typed AST used as the intermediate representation
+//! between HTML and Markdown. Use it directly when you need to inspect or
+//! transform the tree before serializing:
+//!
+//! ```rust
+//! use html2markdown::{html_to_mdast, mdast_to_string, Options, StringifyOptions};
+//!
+//! let opts = Options::new();
+//! let tree = html_to_mdast("<h1>Title</h1><p>Body</p>", &opts);
+//! // … inspect or transform `tree` …
+//! let md = mdast_to_string(&tree, &opts.stringify);
+//! ```
+
 /// Alignment of a table column.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AlignKind {

@@ -7,6 +7,24 @@
 //   - hast-util-to-mdast (transformer): https://github.com/syntax-tree/hast-util-to-mdast
 //   - mdast-util-to-markdown (serializer): https://github.com/syntax-tree/mdast-util-to-markdown
 
+//! HTML to Markdown converter using AST-to-AST transformation.
+//!
+//! # Quick start
+//!
+//! ```rust
+//! let md = html2markdown::convert("<h1>Hello</h1><p>World</p>");
+//! assert_eq!(md, "# Hello\n\nWorld\n");
+//! ```
+//!
+//! # Related crates
+//!
+//! - [`trafilatura`](https://crates.io/crates/trafilatura) — full-featured web
+//!   content extraction with metadata, comments, and fallback strategies.
+//! - [`libreadability`](https://crates.io/crates/libreadability) — Mozilla Readability
+//!   port for extracting a clean article DOM subtree.
+//! - [`justext`](https://crates.io/crates/justext) — paragraph-level boilerplate
+//!   removal using stopword density.
+
 mod hast_to_mdast;
 pub mod mdast;
 mod stringify;
