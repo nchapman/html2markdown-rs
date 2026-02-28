@@ -1,0 +1,22 @@
+[package]
+name = "html2markdown-uniffi"
+version = "0.2.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["lib", "cdylib"]
+name = "html2markdown_uniffi"
+
+[[bin]]
+name = "uniffi-bindgen"
+path = "uniffi-bindgen.rs"
+required-features = ["cli"]
+
+[features]
+cli = ["uniffi/cli"]
+
+[dependencies]
+uniffi = "0.31"
+thiserror = "2"
+html2markdown = { path = ".." }
