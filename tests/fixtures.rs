@@ -12,7 +12,7 @@ use pretty_assertions::assert_eq;
 
 fn fixture_test(name: &str) {
     let f = common::load_fixture(name);
-    let result = html_to_markdown::convert_with(&f.html, &f.options);
+    let result = html2markdown::convert_with(&f.html, &f.options);
     assert_eq!(result, f.expected_md, "fixture: {}", name);
 }
 

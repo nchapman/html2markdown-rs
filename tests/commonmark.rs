@@ -688,7 +688,7 @@ fn is_ignored(n: u32) -> bool {
 /// normalize(spec HTML). Returns `Ok(())` on match, `Err(message)` on mismatch.
 fn test_example(ex: &SpecExample) -> Result<(), String> {
     // Step 1: convert the spec HTML to Markdown.
-    let markdown = html_to_markdown::convert(&ex.html);
+    let markdown = html2markdown::convert(&ex.html);
 
     // Step 2: render the Markdown back to HTML with pulldown-cmark.
     // Enable GFM extensions in case our converter produced table/strikethrough

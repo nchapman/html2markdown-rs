@@ -1,4 +1,4 @@
-// html-to-markdown — HTML to Markdown converter using AST-to-AST transformation.
+// html2markdown — HTML to Markdown converter using AST-to-AST transformation.
 //
 // Architecture:
 //   HTML string → html5ever parse → HTML tree → hast_to_mdast → MDAST → stringify → Markdown
@@ -214,7 +214,7 @@ impl Options {
 /// # Examples
 ///
 /// ```
-/// let md = html_to_markdown::convert("<h1>Hello</h1><p>World</p>");
+/// let md = html2markdown::convert("<h1>Hello</h1><p>World</p>");
 /// assert!(md.contains("Hello"));
 /// ```
 pub fn convert(html: &str) -> String {
@@ -226,7 +226,7 @@ pub fn convert(html: &str) -> String {
 /// # Examples
 ///
 /// ```
-/// use html_to_markdown::{convert_with, Options, HeadingStyle};
+/// use html2markdown::{convert_with, Options, HeadingStyle};
 ///
 /// let options = Options::new().with_heading_style(HeadingStyle::Setext);
 /// let md = convert_with("<h1>Hello</h1>", &options);

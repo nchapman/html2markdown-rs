@@ -1,6 +1,6 @@
-// End-to-end API tests for html-to-markdown.
+// End-to-end API tests for html2markdown.
 
-use html_to_markdown::{convert, convert_with, HeadingStyle, Options};
+use html2markdown::{convert, convert_with, HeadingStyle, Options};
 
 #[test]
 fn test_empty_input() {
@@ -50,7 +50,7 @@ fn roundtrip_raw_html_invalid() {
         ),
     ];
     for (n, html_input) in &cases {
-        let md = html_to_markdown::convert(html_input);
+        let md = html2markdown::convert(html_input);
         let parser = Parser::new_ext(&md, Options::all());
         let mut html_out = String::new();
         html::push_html(&mut html_out, parser);

@@ -1,4 +1,4 @@
-// Benchmarks for html-to-markdown conversion.
+// Benchmarks for html2markdown conversion.
 //
 // Three groups:
 //   full_pipeline  — end-to-end convert() on each fixture
@@ -9,7 +9,7 @@
 
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use html2md::parse_html;
-use html_to_markdown::{convert, html_to_mdast, mdast_to_string, Options, StringifyOptions};
+use html2markdown::{convert, html_to_mdast, mdast_to_string, Options, StringifyOptions};
 
 fn load_fixtures() -> Vec<(&'static str, &'static str)> {
     vec![

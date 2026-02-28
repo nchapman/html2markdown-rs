@@ -1,9 +1,9 @@
-// Shared test helpers for html-to-markdown-rs.
+// Shared test helpers for html2markdown-rs.
 
 use std::fs;
 use std::path::Path;
 
-use html_to_markdown::Options;
+use html2markdown::Options;
 
 /// Fixture options parsed from `index.json`.
 pub struct FixtureOptions {
