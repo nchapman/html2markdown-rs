@@ -78,7 +78,15 @@ fn handle_heading(state: &mut State, node: &mdast::Heading) -> String {
 
     // ATX heading: replace hard breaks first, then bare newlines.
     // Order matters: reversing would corrupt "\\\n" (the \n would be replaced first).
-    let content = content.replace("\\\n", " ").replace('\n', "&#xA;");
+    let mut content = content.replace("\\\n", " ").replace('\n', "&#xA;");
+
+    // Encode leading space/tab so CommonMark doesn't strip it as insignificant
+    // whitespace. Port of mdast-util-to-markdown heading.js.
+    if content.starts_with(' ') {
+        content.replace_range(..1, "&#x20;");
+    } else if content.starts_with('\t') {
+        content.replace_range(..1, "&#x9;");
+    }
 
     // Escape trailing `#` sequence if preceded by a space (or content is all `#`),
     // which CommonMark parsers strip as the optional ATX closing sequence.
@@ -199,7 +207,32 @@ fn handle_list(state: &mut State, node: &mdast::List) -> String {
         // Reset bullet_last_used after each list item to prevent state from
         // nested lists in one item leaking into sibling items' nested lists.
         state.bullet_last_used = None;
-        let indent_width = prefix.len() + 1; // +1 for the space after bullet
+
+        // Compute indent based on list_item_indent option.
+        // Port of mdast-util-to-markdown list-item.js indentation logic.
+        let indent_width = match state.options.list_item_indent {
+            super::ListItemIndent::Tab => {
+                // Round up to next multiple of 4 (tab stop), minimum prefix + 1.
+                let min = prefix.len() + 1;
+                min.div_ceil(4) * 4
+            }
+            super::ListItemIndent::Mixed => {
+                // Use tab-style indent when the item is spread (multiple children),
+                // otherwise use one-space indent.
+                let is_spread = if let Node::ListItem(li) = child {
+                    li.spread || node.spread
+                } else {
+                    false
+                };
+                if is_spread {
+                    let min = prefix.len() + 1;
+                    min.div_ceil(4) * 4
+                } else {
+                    prefix.len() + 1
+                }
+            }
+            super::ListItemIndent::One => prefix.len() + 1,
+        };
         let indent = " ".repeat(indent_width);
 
         let mut lines: Vec<String> = content.lines().map(String::from).collect();
@@ -208,10 +241,12 @@ fn handle_list(state: &mut State, node: &mdast::List) -> String {
         }
 
         // Don't add trailing space if the first line is empty (empty list item).
+        // Pad between prefix and content to match the computed indent width.
+        let padding = " ".repeat(indent_width - prefix.len());
         let first = if lines[0].is_empty() {
             prefix.clone()
         } else {
-            format!("{} {}", prefix, lines[0])
+            format!("{}{}{}", prefix, padding, lines[0])
         };
         let rest: Vec<String> = lines[1..]
             .iter()
@@ -290,7 +325,38 @@ fn handle_list_item(state: &mut State, node: &mdast::ListItem) -> String {
 }
 
 fn handle_code(state: &mut State, node: &mdast::Code) -> String {
-    let fence_char = state.options.fence;
+    let has_info = node.lang.is_some() || node.meta.is_some();
+
+    // When fences are disabled and there's no info string, emit 4-space indented code
+    // if the value is suitable. Port of mdast-util-to-markdown code.js +
+    // format-code-as-indented.js guards: must have non-whitespace content and must
+    // not start or end with a blank line (which would break indented code parsing).
+    if !state.options.fences && !has_info && can_format_as_indented(&node.value) {
+        let indented: String = node
+            .value
+            .lines()
+            .map(|line| {
+                if line.is_empty() {
+                    String::new()
+                } else {
+                    format!("    {}", line)
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        return indented;
+    }
+
+    let mut fence_char = state.options.fence;
+
+    // If the lang contains a backtick and we're using backtick fences, switch to tilde.
+    // A backtick in the info string would prematurely close the fence.
+    // Port of mdast-util-to-markdown code.js.
+    let lang = node.lang.as_deref().unwrap_or("");
+    if lang.contains('`') && fence_char == '`' {
+        fence_char = '~';
+    }
+
     // Find minimum fence length that doesn't conflict with content.
     let content_max = node
         .value
@@ -308,11 +374,21 @@ fn handle_code(state: &mut State, node: &mdast::Code) -> String {
     let fence_len = (content_max + 1).max(3);
     let fence: String = std::iter::repeat(fence_char).take(fence_len).collect();
 
-    let info = node.lang.as_deref().unwrap_or("");
+    // Escape space in lang as &#x20; when meta is present, because the first
+    // space in the info string separates lang from meta. Without meta, a space
+    // in the lang is harmless (the entire info string IS the lang).
+    // Port of mdast-util-to-markdown code.js.
+    let info = if node.meta.is_some() {
+        lang.replace(' ', "&#x20;")
+    } else {
+        lang.to_string()
+    };
+
+    // Replace newlines in meta with spaces — newlines would break the fence line.
     let meta = node
         .meta
         .as_ref()
-        .map(|m| format!(" {}", m))
+        .map(|m| format!(" {}", m.replace('\n', " ")))
         .unwrap_or_default();
 
     if node.value.is_empty() {
@@ -402,20 +478,23 @@ fn handle_strong(state: &mut State, node: &mdast::Strong) -> String {
 }
 
 fn handle_inline_code(node: &mdast::InlineCode) -> String {
+    // Replace newlines with spaces — a newline inside inline code can trigger
+    // block constructs when re-parsed (e.g. `\n#` becomes an ATX heading).
+    // Port of mdast-util-to-markdown inline-code.js.
+    let value = node.value.replace('\n', " ");
+
     // Choose backtick count to avoid conflicts with content.
-    let max_run = longest_backtick_run(&node.value);
+    let max_run = longest_backtick_run(&value);
     let ticks = "`".repeat(max_run + 1);
 
-    let needs_space = node.value.starts_with('`')
-        || node.value.ends_with('`')
-        || (node.value.starts_with(' ')
-            && node.value.ends_with(' ')
-            && !node.value.trim().is_empty());
+    let needs_space = value.starts_with('`')
+        || value.ends_with('`')
+        || (value.starts_with(' ') && value.ends_with(' ') && !value.trim().is_empty());
 
     if needs_space {
-        format!("{} {} {}", ticks, node.value, ticks)
+        format!("{} {} {}", ticks, value, ticks)
     } else {
-        format!("{}{}{}", ticks, node.value, ticks)
+        format!("{}{}{}", ticks, value, ticks)
     }
 }
 
@@ -719,6 +798,32 @@ fn handle_yaml(node: &mdast::Yaml) -> String {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+/// Check whether a code value can be formatted as a 4-space indented block.
+/// Port of mdast-util-to-markdown format-code-as-indented.js.
+/// Returns false for empty values, all-whitespace values, or values that
+/// start/end with a blank line (which break indented code block parsing).
+fn can_format_as_indented(value: &str) -> bool {
+    if value.is_empty() {
+        return false;
+    }
+    if !value.contains(|c: char| c != ' ' && c != '\t' && c != '\r' && c != '\n') {
+        return false;
+    }
+    // Check for blank-line margins: first or last line is blank/whitespace-only.
+    let first_line = value.lines().next().unwrap_or("");
+    if first_line.chars().all(|c| c == ' ' || c == '\t') {
+        return false;
+    }
+    // Check last line: split the value at the final newline.
+    if let Some(pos) = value.rfind('\n') {
+        let last_line = &value[pos + 1..];
+        if last_line.chars().all(|c| c == ' ' || c == '\t') {
+            return false;
+        }
+    }
+    true
+}
 
 /// Find the longest consecutive run of backticks in a string.
 fn longest_backtick_run(s: &str) -> usize {

@@ -41,12 +41,41 @@ pub(crate) fn container_phrasing(state: &mut State, children: &[Node]) -> String
     // with `[` (i.e., a link/image), escape the `!` as `\!` to prevent
     // `![text](url)` from being interpreted as image syntax.
     for i in 0..parts.len().saturating_sub(1) {
-        if parts[i + 1].starts_with('[') && parts[i].ends_with('!') && !parts[i].ends_with("\\!") {
+        if parts[i + 1].starts_with('[') && ends_with_unescaped(&parts[i], b'!') {
             let len = parts[i].len();
             parts[i].truncate(len - 1);
             parts[i].push_str("\\!");
         }
     }
 
+    // Port of mdast-util-to-markdown unsafe entry:
+    //   {character: ']', after: /\(/, inConstruct: 'phrasing'}
+    // When a part ends with `]` and the next starts with `(`, it looks like
+    // `](` — accidental link syntax. Escape the `]` as `\]`.
+    for i in 0..parts.len().saturating_sub(1) {
+        if parts[i + 1].starts_with('(') && ends_with_unescaped(&parts[i], b']') {
+            let len = parts[i].len();
+            parts[i].truncate(len - 1);
+            parts[i].push_str("\\]");
+        }
+    }
+
     parts.join("")
+}
+
+/// Check whether a string ends with a given ASCII byte that is not preceded
+/// by an odd number of backslashes (i.e., the character is unescaped).
+fn ends_with_unescaped(s: &str, ch: u8) -> bool {
+    let bytes = s.as_bytes();
+    if bytes.last() != Some(&ch) {
+        return false;
+    }
+    // Count consecutive backslashes before the final character.
+    let backslashes = bytes[..bytes.len() - 1]
+        .iter()
+        .rev()
+        .take_while(|&&b| b == b'\\')
+        .count();
+    // Even number of backslashes (including zero) means the char is unescaped.
+    backslashes % 2 == 0
 }

@@ -169,12 +169,36 @@ pub(crate) fn escape_at_break_start(mut content: String) -> String {
         b'`' => second == Some(b'`'),
         // `~` → when followed by `~`
         b'~' => second == Some(b'~'),
+        // `<` → when followed by `!`, `/`, `?`, or a letter (triggers HTML/autolink)
+        b'<' => second.is_some_and(|c| {
+            matches!(c, b'!' | b'/' | b'?') || c.is_ascii_alphabetic()
+        }),
         _ => false,
     };
 
     if needs_escape {
         content.insert(0, '\\');
+        return content;
     }
+
+    // Ordered list marker: digit(s) followed by `.` or `)` then whitespace or end.
+    // E.g. `1. foo` or `10) bar` at the start of a block triggers an ordered list.
+    // Escape by inserting `\` before the `.` or `)`.
+    // Port of mdast-util-to-markdown unsafe.js atBreak patterns for ordered lists.
+    if first.is_ascii_digit() {
+        let mut j = 1;
+        while j < bytes.len() && bytes[j].is_ascii_digit() {
+            j += 1;
+        }
+        if j < bytes.len() && (bytes[j] == b'.' || bytes[j] == b')') {
+            // Check that the delimiter is followed by whitespace or end of string.
+            let after = bytes.get(j + 1);
+            if after.is_none() || matches!(after, Some(b' ' | b'\t' | b'\r' | b'\n')) {
+                content.insert(j, '\\');
+            }
+        }
+    }
+
     content
 }
 
