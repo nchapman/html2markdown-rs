@@ -352,6 +352,10 @@ impl Node {
     }
 
     /// Whether this node is flow (block) content.
+    ///
+    /// Note: `ListItem`, `TableRow`, `TableCell`, and `Yaml` return `false`
+    /// here; they belong to list-content and frontmatter content models
+    /// respectively in the mdast spec.
     pub fn is_flow(&self) -> bool {
         matches!(
             self,
