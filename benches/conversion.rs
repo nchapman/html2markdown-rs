@@ -7,9 +7,10 @@
 //
 // Throughput is reported in bytes/sec so results are comparable across fixture sizes.
 
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use html2markdown::{convert, html_to_mdast, mdast_to_string, Options, StringifyOptions};
 use html2md::parse_html;
+use std::hint::black_box;
 
 fn load_fixtures() -> Vec<(&'static str, &'static str)> {
     vec![

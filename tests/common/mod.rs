@@ -10,6 +10,7 @@ pub struct FixtureOptions {
     pub html: String,
     pub expected_md: String,
     pub options: Options,
+    #[allow(dead_code)]
     pub fragment: bool,
 }
 

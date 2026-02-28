@@ -402,9 +402,8 @@ fn try_decode_entity(s: &str) -> Option<(String, usize)> {
 
     let total_len = 1 + semi_in_rest + 1; // '&' + name + ';'
 
-    let decoded = if inner.starts_with('#') {
+    let decoded = if let Some(num_str) = inner.strip_prefix('#') {
         // Numeric character reference.
-        let num_str = &inner[1..];
         let code_point = if num_str.starts_with('x') || num_str.starts_with('X') {
             u32::from_str_radix(&num_str[1..], 16).ok()?
         } else {
