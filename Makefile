@@ -44,6 +44,9 @@ $(GENERATED_DIR)/swift: cargo-build
 $(GENERATED_DIR)/kotlin: cargo-build
 	$(BINDGEN) generate --library $(CDYLIB) --language kotlin --out-dir $@
 
+$(GENERATED_DIR)/ruby: cargo-build
+	$(BINDGEN) generate --library $(CDYLIB) --language ruby --out-dir $@
+
 $(GENERATED_DIR)/dart: cargo-build
 	$(DART_BINDGEN) generate --library $(CDYLIB) --out-dir $@
 
@@ -110,6 +113,22 @@ build-kotlin: $(GENERATED_DIR)/kotlin cargo-build
 test-kotlin: build-kotlin
 	cd $(KOTLIN_TEST_DIR) && ./gradlew test
 
+# --- Ruby ---
+
+RUBY_TEST_DIR := tests/bindings/ruby
+
+.PHONY: build-ruby
+build-ruby: $(GENERATED_DIR)/ruby cargo-build
+	$(call require,ruby)
+	$(call require,bundle)
+	mkdir -p $(RUBY_TEST_DIR)/lib
+	cp $(GENERATED_DIR)/ruby/html2markdown_uniffi.rb $(RUBY_TEST_DIR)/lib/
+	cd $(RUBY_TEST_DIR) && bundle install
+
+.PHONY: test-ruby
+test-ruby: build-ruby
+	cd $(RUBY_TEST_DIR) && bundle exec rake test
+
 # --- Dart ---
 
 DART_TEST_DIR := tests/bindings/dart
@@ -128,7 +147,7 @@ test-dart: build-dart
 # --- Aggregate ---
 
 .PHONY: test-bindings
-test-bindings: test-python test-swift test-kotlin test-dart
+test-bindings: test-python test-swift test-kotlin test-ruby test-dart
 
 .PHONY: clean
 clean:
@@ -136,5 +155,6 @@ clean:
 	rm -rf $(VENV)
 	rm -rf $(SWIFT_TEST_DIR)/.build
 	rm -rf $(KOTLIN_TEST_DIR)/build $(KOTLIN_TEST_DIR)/.gradle
+	rm -rf $(RUBY_TEST_DIR)/vendor $(RUBY_TEST_DIR)/.bundle $(RUBY_TEST_DIR)/Gemfile.lock
 	rm -rf $(DART_TEST_DIR)/.dart_tool $(DART_TEST_DIR)/pubspec.lock
 	cd $(UNIFFI_DIR) && $(CARGO) clean

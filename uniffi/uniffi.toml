@@ -12,3 +12,6 @@ module_name = "Html2Markdown"
 [bindings.dart]
 cdylib_name = "html2markdown_uniffi"
 library_name = "html2markdown_uniffi"
+
+[bindings.ruby]
+cdylib_name = "html2markdown_uniffi"
