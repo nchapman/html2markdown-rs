@@ -31,6 +31,7 @@ cargo-build:
 # --- uniffi-bindgen ---
 
 BINDGEN := $(CARGO) run --manifest-path $(UNIFFI_DIR)/Cargo.toml --features cli --bin uniffi-bindgen --
+DART_BINDGEN := $(CARGO) run --manifest-path $(UNIFFI_DIR)/Cargo.toml --features dart-cli --bin uniffi-bindgen-dart --
 
 GENERATED_DIR := $(UNIFFI_DIR)/generated
 
@@ -42,6 +43,9 @@ $(GENERATED_DIR)/swift: cargo-build
 
 $(GENERATED_DIR)/kotlin: cargo-build
 	$(BINDGEN) generate --library $(CDYLIB) --language kotlin --out-dir $@
+
+$(GENERATED_DIR)/dart: cargo-build
+	$(DART_BINDGEN) generate --library $(CDYLIB) --out-dir $@
 
 # --- Python ---
 
@@ -106,10 +110,25 @@ build-kotlin: $(GENERATED_DIR)/kotlin cargo-build
 test-kotlin: build-kotlin
 	cd $(KOTLIN_TEST_DIR) && ./gradlew test
 
+# --- Dart ---
+
+DART_TEST_DIR := tests/bindings/dart
+
+.PHONY: build-dart
+build-dart: $(GENERATED_DIR)/dart cargo-build
+	$(call require,dart)
+	mkdir -p $(DART_TEST_DIR)/lib
+	cp $(GENERATED_DIR)/dart/html2markdown_uniffi.dart $(DART_TEST_DIR)/lib/
+	cd $(DART_TEST_DIR) && dart pub get
+
+.PHONY: test-dart
+test-dart: build-dart
+	cd $(DART_TEST_DIR) && dart test -r expanded
+
 # --- Aggregate ---
 
 .PHONY: test-bindings
-test-bindings: test-python test-swift test-kotlin
+test-bindings: test-python test-swift test-kotlin test-dart
 
 .PHONY: clean
 clean:
@@ -117,4 +136,5 @@ clean:
 	rm -rf $(VENV)
 	rm -rf $(SWIFT_TEST_DIR)/.build
 	rm -rf $(KOTLIN_TEST_DIR)/build $(KOTLIN_TEST_DIR)/.gradle
+	rm -rf $(DART_TEST_DIR)/.dart_tool $(DART_TEST_DIR)/pubspec.lock
 	cd $(UNIFFI_DIR) && $(CARGO) clean

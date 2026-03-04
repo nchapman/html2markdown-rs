@@ -8,3 +8,7 @@ package_name = "html2markdown"
 [bindings.swift]
 cdylib_name = "html2markdown_uniffi"
 module_name = "Html2Markdown"
+
+[bindings.dart]
+cdylib_name = "html2markdown_uniffi"
+library_name = "html2markdown_uniffi"
