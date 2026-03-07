@@ -18,3 +18,6 @@ cdylib_name = "html2markdown_uniffi"
 
 [bindings.js]
 module_name = "Html2Markdown"
+
+[bindings.csharp]
+cdylib_name = "html2markdown_uniffi"

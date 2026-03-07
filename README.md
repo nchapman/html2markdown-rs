@@ -73,13 +73,14 @@ html2markdown = { version = "0.2", features = ["tracing"] }
 
 ## Language bindings
 
-Python, Swift, and Kotlin bindings are available via [UniFFI](https://mozilla.github.io/uniffi-rs/).
+Python, Swift, Kotlin, Ruby, Dart, JavaScript, and C# bindings are available via [UniFFI](https://mozilla.github.io/uniffi-rs/).
 
 ```sh
 make test-bindings   # run all binding test suites
 make test-python     # Python only (pytest)
 make test-swift      # Swift only (XCTest)
 make test-kotlin     # Kotlin only (JUnit 5)
+make test-cs         # C# only (xUnit)
 ```
 
 ### Python
@@ -104,6 +105,14 @@ let md = convert(html: "<h1>Hello</h1>")
 import uniffi.html2markdown_uniffi.*
 
 val md = convert("<h1>Hello</h1>")
+```
+
+### C\#
+
+```csharp
+using uniffi.html2markdown_uniffi;
+
+var md = Html2markdownUniffiMethods.Convert("<h1>Hello</h1>");
 ```
 
 ## Benchmarks

@@ -9,3 +9,6 @@ tests/bindings/kotlin/build/
 tests/bindings/js/lib/
 tests/bindings/js/node_modules/
 tests/bindings/js/pnpm-lock.yaml
+tests/bindings/cs/bin/
+tests/bindings/cs/obj/
+tests/bindings/cs/lib/

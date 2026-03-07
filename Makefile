@@ -33,6 +33,7 @@ cargo-build:
 BINDGEN := $(CARGO) run --manifest-path $(UNIFFI_DIR)/Cargo.toml --features cli --bin uniffi-bindgen --
 DART_BINDGEN := $(CARGO) run --manifest-path $(UNIFFI_DIR)/Cargo.toml --features dart-cli --bin uniffi-bindgen-dart --
 JS_BINDGEN := $(CARGO) run --manifest-path $(UNIFFI_DIR)/Cargo.toml --features js-cli --bin uniffi-bindgen-js --
+CS_BINDGEN := uniffi-bindgen-cs
 
 GENERATED_DIR := $(UNIFFI_DIR)/generated
 
@@ -47,6 +48,15 @@ $(GENERATED_DIR)/kotlin: cargo-build
 
 $(GENERATED_DIR)/ruby: cargo-build
 	$(BINDGEN) generate --library $(CDYLIB) --language ruby --out-dir $@
+
+$(GENERATED_DIR)/cs: cargo-build
+	$(call require,$(CS_BINDGEN))
+	$(CS_BINDGEN) --library $(CDYLIB) --out-dir $@
+	@# Patch contract version: uniffi-bindgen-cs v0.10 emits contract 29 (uniffi 0.29)
+	@# but this project uses uniffi 0.31 (contract 30). The ABI is compatible.
+	perl -i -pe 's/\bif \(29 != /if (30 != /' $@/html2markdown_uniffi.cs
+	@grep -q 'if (30 != ' $@/html2markdown_uniffi.cs || \
+		(echo "ERROR: contract version patch failed — check uniffi-bindgen-cs version" && exit 1)
 
 $(GENERATED_DIR)/dart: cargo-build
 	$(DART_BINDGEN) generate --library $(CDYLIB) --out-dir $@
@@ -158,6 +168,23 @@ build-dart: $(GENERATED_DIR)/dart cargo-build
 test-dart: build-dart
 	cd $(DART_TEST_DIR) && dart test -r expanded
 
+# --- C# ---
+
+CS_TEST_DIR := tests/bindings/cs
+
+.PHONY: build-cs
+build-cs: $(GENERATED_DIR)/cs cargo-build
+	$(call require,dotnet)
+	mkdir -p $(CS_TEST_DIR)/lib
+	cp $(GENERATED_DIR)/cs/html2markdown_uniffi.cs $(CS_TEST_DIR)/lib/
+	cd $(CS_TEST_DIR) && dotnet build
+	@# Copy native library next to test binary so DllImport can find it
+	cp $(CDYLIB) $(CS_TEST_DIR)/bin/Debug/net8.0/
+
+.PHONY: test-cs
+test-cs: build-cs
+	cd $(CS_TEST_DIR) && dotnet test --no-build
+
 # --- JavaScript/TypeScript ---
 
 JS_TEST_DIR := tests/bindings/js
@@ -179,7 +206,7 @@ test-js: build-js
 # --- Aggregate ---
 
 .PHONY: test-bindings
-test-bindings: test-python test-swift test-kotlin test-ruby test-dart test-js
+test-bindings: test-python test-swift test-kotlin test-ruby test-dart test-js test-cs
 
 .PHONY: clean
 clean:
@@ -190,4 +217,5 @@ clean:
 	rm -rf $(RUBY_TEST_DIR)/vendor $(RUBY_TEST_DIR)/.bundle $(RUBY_TEST_DIR)/Gemfile.lock
 	rm -rf $(DART_TEST_DIR)/.dart_tool $(DART_TEST_DIR)/pubspec.lock
 	rm -rf $(JS_TEST_DIR)/node_modules $(JS_TEST_DIR)/pnpm-lock.yaml $(JS_TEST_DIR)/lib
+	rm -rf $(CS_TEST_DIR)/bin $(CS_TEST_DIR)/obj $(CS_TEST_DIR)/lib
 	cd $(UNIFFI_DIR) && $(CARGO) clean
