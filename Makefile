@@ -32,6 +32,7 @@ cargo-build:
 
 BINDGEN := $(CARGO) run --manifest-path $(UNIFFI_DIR)/Cargo.toml --features cli --bin uniffi-bindgen --
 DART_BINDGEN := $(CARGO) run --manifest-path $(UNIFFI_DIR)/Cargo.toml --features dart-cli --bin uniffi-bindgen-dart --
+JS_BINDGEN := $(CARGO) run --manifest-path $(UNIFFI_DIR)/Cargo.toml --features js-cli --bin uniffi-bindgen-js --
 
 GENERATED_DIR := $(UNIFFI_DIR)/generated
 
@@ -49,6 +50,19 @@ $(GENERATED_DIR)/ruby: cargo-build
 
 $(GENERATED_DIR)/dart: cargo-build
 	$(DART_BINDGEN) generate --library $(CDYLIB) --out-dir $@
+
+# --- WASM build ---
+
+WASM_DIR     := $(UNIFFI_DIR)/wasm
+WASM_TARGET  := $(WASM_DIR)/target/wasm32-unknown-unknown/release/html2markdown_uniffi.wasm
+
+.PHONY: cargo-build-wasm
+cargo-build-wasm:
+	$(CARGO) build --manifest-path $(WASM_DIR)/Cargo.toml \
+		--target wasm32-unknown-unknown --release
+
+$(GENERATED_DIR)/js: cargo-build-wasm
+	$(JS_BINDGEN) generate --out-dir $@ $(WASM_TARGET)
 
 # --- Python ---
 
@@ -144,10 +158,28 @@ build-dart: $(GENERATED_DIR)/dart cargo-build
 test-dart: build-dart
 	cd $(DART_TEST_DIR) && dart test -r expanded
 
+# --- JavaScript/TypeScript ---
+
+JS_TEST_DIR := tests/bindings/js
+
+.PHONY: build-js
+build-js: $(GENERATED_DIR)/js
+	$(call require,node)
+	$(call require,pnpm)
+	mkdir -p $(JS_TEST_DIR)/lib
+	cp $(GENERATED_DIR)/js/html2markdown_uniffi.ts $(JS_TEST_DIR)/lib/
+	cp $(GENERATED_DIR)/js/html2markdown_uniffi.wasm $(JS_TEST_DIR)/lib/
+	cp $(GENERATED_DIR)/js/uniffi_runtime.ts $(JS_TEST_DIR)/lib/
+	cd $(JS_TEST_DIR) && pnpm install
+
+.PHONY: test-js
+test-js: build-js
+	cd $(JS_TEST_DIR) && pnpm test
+
 # --- Aggregate ---
 
 .PHONY: test-bindings
-test-bindings: test-python test-swift test-kotlin test-ruby test-dart
+test-bindings: test-python test-swift test-kotlin test-ruby test-dart test-js
 
 .PHONY: clean
 clean:
@@ -157,4 +189,5 @@ clean:
 	rm -rf $(KOTLIN_TEST_DIR)/build $(KOTLIN_TEST_DIR)/.gradle
 	rm -rf $(RUBY_TEST_DIR)/vendor $(RUBY_TEST_DIR)/.bundle $(RUBY_TEST_DIR)/Gemfile.lock
 	rm -rf $(DART_TEST_DIR)/.dart_tool $(DART_TEST_DIR)/pubspec.lock
+	rm -rf $(JS_TEST_DIR)/node_modules $(JS_TEST_DIR)/pnpm-lock.yaml $(JS_TEST_DIR)/lib
 	cd $(UNIFFI_DIR) && $(CARGO) clean

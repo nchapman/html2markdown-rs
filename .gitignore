@@ -1,7 +1,11 @@
 /target
+uniffi/wasm/target/
 node_modules/
 package-lock.json
 .venv*/
 tests/bindings/swift/.build/
 tests/bindings/kotlin/.gradle/
 tests/bindings/kotlin/build/
+tests/bindings/js/lib/
+tests/bindings/js/node_modules/
+tests/bindings/js/pnpm-lock.yaml

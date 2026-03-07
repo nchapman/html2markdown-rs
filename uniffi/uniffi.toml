@@ -15,3 +15,6 @@ library_name = "html2markdown_uniffi"
 
 [bindings.ruby]
 cdylib_name = "html2markdown_uniffi"
+
+[bindings.js]
+module_name = "Html2Markdown"

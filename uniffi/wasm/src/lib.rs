@@ -1,3 +1,3 @@
 uniffi::setup_scaffolding!("html2markdown_uniffi");
 
-include!("exports.rs");
+include!("../../src/exports.rs");
