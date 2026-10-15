@@ -119,8 +119,8 @@ var md = Html2markdownUniffiMethods.Convert("<h1>Hello</h1>");
 
 Throughput comparison (MiB/s, higher is better):
 
-| Fixture | Rust | html2md (Rust) | Go | hast (JS) | turndown (JS) |
-|---------|-----:|---------------:|---:|----------:|--------------:|
+| Fixture | html2markdown | html2md (Rust) | Go | hast (JS) | turndown (JS) |
+|---------|--------------:|---------------:|---:|----------:|--------------:|
 | article | 68.5 | 58.3 | 29.3 | 4.1 | 15.8 |
 | table | 21.1 | 17.9 | 21.7 | 1.8 | ERR |
 | lists | 19.8 | 21.3 | 18.0 | 1.7 | 4.6 |
