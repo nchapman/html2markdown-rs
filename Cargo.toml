@@ -1,10 +1,10 @@
 [package]
 name = "html2markdown"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 description = "HTML to Markdown converter using AST-to-AST transformation"
 license = "MIT"
-rust-version = "1.83"
+rust-version = "1.88"
 readme = "README.md"
 repository = "https://github.com/nchapman/html2markdown-rs"
 keywords = ["html", "markdown", "converter", "commonmark", "mdast"]
@@ -16,9 +16,9 @@ name = "html2markdown"
 
 [dependencies]
 # HTML parsing (spec-compliant HTML5)
-html5ever = "0.38"
-markup5ever = "0.38"
-markup5ever_rcdom = "0.38"
+html5ever = "0.39"
+markup5ever = "0.39"
+markup5ever_rcdom = "0.39"
 
 # Regex (context-sensitive escaping patterns)
 regex = "1"

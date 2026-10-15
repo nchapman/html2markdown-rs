@@ -2,7 +2,7 @@
 
 [![Crates.io](https://img.shields.io/crates/v/html2markdown.svg)](https://crates.io/crates/html2markdown)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Rust: 1.80+](https://img.shields.io/badge/rust-1.80%2B-orange.svg)](https://www.rust-lang.org)
+[![Rust: 1.88+](https://img.shields.io/badge/rust-1.88%2B-orange.svg)](https://www.rust-lang.org)
 
 HTML to Markdown converter using AST-to-AST transformation.
 
@@ -119,8 +119,8 @@ var md = Html2markdownUniffiMethods.Convert("<h1>Hello</h1>");
 
 Throughput comparison (MiB/s, higher is better):
 
-| Fixture | Rust | html2md (Rust) | Go | hast (JS) | turndown (JS) |
-|---------|-----:|---------------:|---:|----------:|--------------:|
+| Fixture | html2markdown | html2md (Rust) | Go | hast (JS) | turndown (JS) |
+|---------|--------------:|---------------:|---:|----------:|--------------:|
 | article | 68.5 | 58.3 | 29.3 | 4.1 | 15.8 |
 | table | 21.1 | 17.9 | 21.7 | 1.8 | ERR |
 | lists | 19.8 | 21.3 | 18.0 | 1.7 | 4.6 |

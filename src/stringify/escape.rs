@@ -156,13 +156,13 @@ pub(crate) fn escape_at_break_start(mut content: String) -> String {
         // `>` → always (blockquote)
         b'>' => true,
         // `*` → when followed by [ \t\r\n*]
-        b'*' => second.map_or(true, |c| matches!(c, b' ' | b'\t' | b'\r' | b'\n' | b'*')),
+        b'*' => second.is_none_or(|c| matches!(c, b' ' | b'\t' | b'\r' | b'\n' | b'*')),
         // `+` → when followed by [ \t\r\n]
-        b'+' => second.map_or(true, |c| matches!(c, b' ' | b'\t' | b'\r' | b'\n')),
+        b'+' => second.is_none_or(|c| matches!(c, b' ' | b'\t' | b'\r' | b'\n')),
         // `-` → when followed by [ \t\r\n-]
-        b'-' => second.map_or(true, |c| matches!(c, b' ' | b'\t' | b'\r' | b'\n' | b'-')),
+        b'-' => second.is_none_or(|c| matches!(c, b' ' | b'\t' | b'\r' | b'\n' | b'-')),
         // `=` → when followed by [ \t] or end of string
-        b'=' => second.map_or(true, |c| matches!(c, b' ' | b'\t')),
+        b'=' => second.is_none_or(|c| matches!(c, b' ' | b'\t')),
         // `_` → when followed by _
         b'_' => second == Some(b'_'),
         // `` ` `` → when followed by `` ` ``
