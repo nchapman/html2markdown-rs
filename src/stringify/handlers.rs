@@ -372,7 +372,7 @@ fn handle_code(state: &mut State, node: &mdast::Code) -> String {
         .max()
         .unwrap_or(0);
     let fence_len = (content_max + 1).max(3);
-    let fence: String = std::iter::repeat(fence_char).take(fence_len).collect();
+    let fence: String = std::iter::repeat_n(fence_char, fence_len).collect();
 
     // Escape space in lang as &#x20; when meta is present, because the first
     // space in the info string separates lang from meta. Without meta, a space

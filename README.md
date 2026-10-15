@@ -2,7 +2,7 @@
 
 [![Crates.io](https://img.shields.io/crates/v/html2markdown.svg)](https://crates.io/crates/html2markdown)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Rust: 1.80+](https://img.shields.io/badge/rust-1.80%2B-orange.svg)](https://www.rust-lang.org)
+[![Rust: 1.88+](https://img.shields.io/badge/rust-1.88%2B-orange.svg)](https://www.rust-lang.org)
 
 HTML to Markdown converter using AST-to-AST transformation.
 
